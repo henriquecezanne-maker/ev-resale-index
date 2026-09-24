@@ -242,6 +242,11 @@
     }
     var xStep = n > 1 ? (width - padding.left - padding.right) / (n - 1) : 0;
     var toX = function (i) { return padding.left + i * xStep; };
+    // Thin labels/value-tags when there isn't enough horizontal room per point —
+    // otherwise adjacent points overlap into unreadable text on narrow/compact charts.
+    var minPxPerLabel = 46;
+    var labelStride = Math.max(1, Math.ceil(minPxPerLabel / (xStep || minPxPerLabel)));
+    var showAt = function (i) { return i % labelStride === 0 || i === n - 1; };
 
     var allValues = [];
     opts.series.forEach(function (s) {
@@ -299,9 +304,9 @@
         title.textContent = opts.labels[i] + ' ' + s.label + ': ' + (opts.yFormat ? opts.yFormat(v) : v.toFixed(1));
         circle.appendChild(title);
         svg.appendChild(circle);
-        if (opts.showValues) {
+        if (opts.showValues && showAt(i)) {
           var text = svgEl('text', {
-            x: toX(i), y: toY(v) - 10, 'font-size': 11, 'text-anchor': 'middle', fill: s.color,
+            x: toX(i), y: toY(v) - 10, 'font-size': opts.compact ? 9 : 11, 'text-anchor': 'middle', fill: s.color,
           });
           text.textContent = opts.yFormat ? opts.yFormat(v) : v.toFixed(1);
           svg.appendChild(text);
@@ -310,6 +315,7 @@
     });
 
     opts.labels.forEach(function (label, i) {
+      if (!showAt(i)) return;
       var text = svgEl('text', {
         x: toX(i), y: height - 8, 'font-size': 11, 'text-anchor': 'middle', fill: '#7a838a',
       });
@@ -320,9 +326,25 @@
     container.appendChild(svg);
   }
 
+  function renderLegend(legendId, seriesLabels, seriesColors) {
+    var el = document.getElementById(legendId);
+    if (!el) return;
+    while (el.firstChild) el.removeChild(el.firstChild);
+    seriesLabels.forEach(function (label, i) {
+      var span = document.createElement('span');
+      var swatch = document.createElement('span');
+      swatch.className = 'legend-swatch';
+      swatch.style.background = seriesColors[i];
+      span.appendChild(swatch);
+      span.appendChild(document.createTextNode(label));
+      el.appendChild(span);
+    });
+  }
+
   function stackedBarChart(container, opts) {
-    // opts: { labels, seriesLabels, seriesColors, matrix (labels.length x seriesLabels.length shares 0..1), width, height }
+    // opts: { labels, seriesLabels, seriesColors, matrix (labels.length x seriesLabels.length shares 0..1), width, height, legendId }
     clearChart(container);
+    if (opts.legendId) renderLegend(opts.legendId, opts.seriesLabels, opts.seriesColors);
     var width = opts.width || container.clientWidth || 900;
     var height = opts.height || 260;
     var padding = { top: 10, right: 10, bottom: 26, left: 10 };
@@ -508,11 +530,13 @@
       return (free / d.length) * 100;
     });
 
-    lineBarChart(document.getElementById('chart-age'), { labels: labels, series: [{ label: 'Alter (Monate)', values: ageSeries, color: '#0e6b60' }], height: 130, yFormat: function (v) { return v.toFixed(1); } });
-    lineBarChart(document.getElementById('chart-km'), { labels: labels, series: [{ label: 'km', values: kmSeries, color: '#3fb8c9' }], height: 130, yFormat: fmtNum });
-    lineBarChart(document.getElementById('chart-list'), { labels: labels, series: [{ label: 'Listenpreis', values: listSeries, color: '#e0913e' }], height: 130, yFormat: fmtEur });
-    lineBarChart(document.getElementById('chart-battery'), { labels: labels, series: [{ label: 'Batterie', values: batterySeries, color: '#555' }], height: 130, yFormat: function (v) { return v.toFixed(0); } });
-    lineBarChart(document.getElementById('chart-accidentfree'), { labels: labels, series: [{ label: 'Unfallfrei', values: accidentFreeSeries, color: '#0e6b60' }], height: 130, yFormat: function (v) { return v.toFixed(0) + '%'; } });
+    var miniWidth = 280;
+    var miniHeight = 150;
+    lineBarChart(document.getElementById('chart-age'), { labels: labels, series: [{ label: 'Alter (Monate)', values: ageSeries, color: '#0e6b60' }], width: miniWidth, height: miniHeight, showValues: true, compact: true, yFormat: function (v) { return v.toFixed(1); } });
+    lineBarChart(document.getElementById('chart-km'), { labels: labels, series: [{ label: 'km', values: kmSeries, color: '#3fb8c9' }], width: miniWidth, height: miniHeight, showValues: true, compact: true, yFormat: fmtNum });
+    lineBarChart(document.getElementById('chart-list'), { labels: labels, series: [{ label: 'Listenpreis', values: listSeries, color: '#e0913e' }], width: miniWidth, height: miniHeight, showValues: true, compact: true, yFormat: fmtEur });
+    lineBarChart(document.getElementById('chart-battery'), { labels: labels, series: [{ label: 'Batterie', values: batterySeries, color: '#555' }], width: miniWidth, height: miniHeight, showValues: true, compact: true, yFormat: function (v) { return v.toFixed(0); } });
+    lineBarChart(document.getElementById('chart-accidentfree'), { labels: labels, series: [{ label: 'Unfallfrei', values: accidentFreeSeries, color: '#0e6b60' }], width: miniWidth, height: miniHeight, showValues: true, compact: true, yFormat: function (v) { return v.toFixed(0) + '%'; } });
 
     var lastAge = ageSeries[ageSeries.length - 1];
     var lastKm = kmSeries[kmSeries.length - 1];
@@ -533,7 +557,7 @@
     var keys = sortedKeys(byPeriod);
     var labels = keys.map(function (k) { return state.periodGranularity === 'quarter' ? quarterLabel(k) : monthLabel(k); });
 
-    var batteryColors = ['#cdeae5', '#8fd0c6', '#5fb3ac', '#2f8f88', '#14675f', '#0b4f4a'];
+    var batteryColors = ['#bfe3f2', '#5fb3c9', '#2f8f88', '#e0913e', '#c9515f', '#5c3d99'];
     var batteryMatrix = keys.map(function (k) {
       var deals = byPeriod[k];
       var total = deals.length || 1;
@@ -543,9 +567,10 @@
     });
     stackedBarChart(document.getElementById('chart-battery-mix'), {
       labels: labels, seriesLabels: BATTERY_BANDS.map(function (b) { return b.label; }), seriesColors: batteryColors, matrix: batteryMatrix,
+      legendId: 'legend-battery-mix',
     });
 
-    var datekColors = ['#cdeae5', '#a7dcd4', '#7fc9be', '#5fb3ac', '#3f8f88', '#226b64', '#0b4f4a'];
+    var datekColors = ['#bfe3f2', '#5fb3c9', '#2f8f88', '#8cb93e', '#e0913e', '#c9515f', '#5c3d99'];
     var datekMatrix = keys.map(function (k) {
       var deals = byPeriod[k].filter(function (d) { return d.dk !== null; });
       var total = deals.length || 1;
@@ -555,6 +580,7 @@
     });
     stackedBarChart(document.getElementById('chart-datek-mix'), {
       labels: labels, seriesLabels: DATEK_BANDS.map(function (b) { return b.label; }), seriesColors: datekColors, matrix: datekMatrix,
+      legendId: 'legend-datek-mix',
     });
   }
 
@@ -587,6 +613,7 @@
     });
     stackedBarChart(document.getElementById('chart-brand-country'), {
       labels: labels, seriesLabels: topGroups, seriesColors: colors, matrix: matrix, height: 220,
+      legendId: 'legend-brand-country',
     });
 
     var rows = topGroups.map(function (g) {

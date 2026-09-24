@@ -23,6 +23,16 @@ function fmtPct(n: number, digits = 1): string {
   return n.toFixed(digits).replace('.', ',') + ' %';
 }
 
+const MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Formats a "YYYY-MM" month key as "Mon 'YY" (e.g. "2026-09" -> "Sep '26"). */
+function monthKeyLabel(key: string): string {
+  const [year, month] = key.split('-');
+  const monthIndex = month ? Number(month) - 1 : NaN;
+  const abbrev = MONTH_ABBREVIATIONS[monthIndex] ?? month ?? '';
+  return `${abbrev} '${year?.slice(2) ?? ''}`;
+}
+
 interface DashboardData {
   generatedAt: string;
   totalRows: number;
@@ -336,7 +346,7 @@ export function renderInternalDashboard(data: DashboardData): string {
     <div class="kpi-card"><div class="label">Auctions in sample</div><div class="value" id="kpi-n">–</div></div>
     <div class="kpi-card"><div class="label">Median highest bid</div><div class="value" id="kpi-median">–</div></div>
     <div class="kpi-card"><div class="label">Average highest bid</div><div class="value" id="kpi-mean">–</div></div>
-    <div class="kpi-card"><div class="label">Period covered</div><div class="value">Jan '26 – ${escapeHtml(data.latestMonth.split('-')[1] ?? '')}'${escapeHtml(data.latestMonth.split('-')[0]?.slice(2) ?? '')}</div></div>
+    <div class="kpi-card"><div class="label">Period covered</div><div class="value">${escapeHtml(monthKeyLabel(data.baseMonth))} – ${escapeHtml(monthKeyLabel(data.latestMonth))}</div></div>
   </div>
 
   <section class="section-card">
@@ -377,12 +387,14 @@ export function renderInternalDashboard(data: DashboardData): string {
   <section class="section-card">
     <h2 class="section-title">Battery mix — share of auctions per 20 kWh band</h2>
     <p class="section-desc">Share of auctions per battery band. Each column is one period and always sums to 100%.</p>
+    <div class="legend" id="legend-battery-mix"></div>
     <div id="chart-battery-mix"></div>
   </section>
 
   <section class="section-card">
     <h2 class="section-title">DAT-EK mix — share of auctions per price band</h2>
     <p class="section-desc">Dealer-purchase-price proxy (midpoint of the valuation range). DAT-EK coverage varies by month.</p>
+    <div class="legend" id="legend-datek-mix"></div>
     <div id="chart-datek-mix"></div>
   </section>
 
@@ -418,6 +430,7 @@ export function renderInternalDashboard(data: DashboardData): string {
     <h2 class="section-title">Price &amp; mix by brand and country of origin</h2>
     <p class="section-desc">Composition over time and key metrics per group. Switch between individual brands and the brand's country of origin.</p>
     <div class="segmented" style="max-width:220px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button></div>
+    <div class="legend" id="legend-brand-country"></div>
     <div id="chart-brand-country"></div>
     <h3 style="font-size:0.95rem; margin-top:1.3rem;">Metrics per group</h3>
     <p class="section-desc">Base for Δ = Jan 2026 median vs latest period median.</p>
