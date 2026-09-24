@@ -1,0 +1,25 @@
+{
+  "name": "ev-resale-index",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "EV auction price index & residual-value dashboard, built from Metabase CSV exports",
+  "scripts": {
+    "build": "tsx src/build.ts",
+    "dev": "tsx watch src/build.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "eslint": "^10.8.1",
+    "tsx": "^4.23.12",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.10"
+  }
+}

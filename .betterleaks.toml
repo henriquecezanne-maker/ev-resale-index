@@ -1,0 +1,31 @@
+# ============================================================================
+# Secret-scanning rules (betterleaks)
+#
+# This copy ships with the project template so scanning works from the very
+# first save. The pre-commit hook automatically replaces it with the central,
+# always-current Aampere rule set once it can reach it — no action needed.
+# ============================================================================
+
+title = "Aampere secret-scanning rules"
+
+[extend]
+useDefault = true
+
+# ----------------------------------------------------------------------------
+# Allowlist — documented placeholders and obvious fakes.
+# NOTE: values only, never whole files: .env.example must still be scanned so a
+# real value pasted there by mistake is caught.
+# ----------------------------------------------------------------------------
+
+[allowlist]
+description = "Approved placeholder values"
+regexes = [
+  '''(?i)\byour-[a-z0-9-]{2,40}-here\b''',
+  '''(?i)\b(changeme|change-me|placeholder|dummy-value|xxxxxx+)\b''',
+  '''(?i)\bexample[-_]?(key|token|secret|password)\b''',
+]
+stopwords = [
+  "your-token-here",
+  "your-key-here",
+  "your-webhook-url-here",
+]

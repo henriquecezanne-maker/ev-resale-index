@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Aampere pre-commit hook — checks your changes for secrets BEFORE every save.
+#
+# What it does, in plain English:
+#   1. Makes sure the secret scanner (betterleaks) is on this computer.
+#      If it's missing, it downloads the right version automatically.
+#   2. Refreshes Aampere's central scanning rules (works offline with a
+#      cached copy).
+#   3. Scans exactly what you're about to save. If it finds something that
+#      looks like a password or API key, the save is BLOCKED and you get
+#      instructions on how to fix it.
+#
+# This file is installed into .git/hooks/ by scripts/install-hooks.sh.
+# Works on macOS, Linux and Windows (Git Bash). Requires only git + curl.
+# ============================================================================
+set -u
+
+BL_VERSION="1.7.4"
+ORG="Aampere-Automations-AI"
+STANDARDS_REPO="aampere-standards"
+AAMPERE_HOME="${AAMPERE_HOME:-$HOME/.aampere}"
+BIN_DIR="$AAMPERE_HOME/bin"
+CACHE_DIR="$AAMPERE_HOME/cache"
+RULES_CACHE="$CACHE_DIR/betterleaks.toml"
+
+warn() { printf '⚠️  %s\n' "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# 1. Locate or download the scanner
+# ---------------------------------------------------------------------------
+os='' arch='' ext='tar.gz' exe=''
+case "$(uname -s)" in
+  Darwin)                          os='darwin' ;;
+  Linux)                           os='linux' ;;
+  MINGW*|MSYS*|CYGWIN*)            os='windows'; ext='zip'; exe='.exe' ;;
+esac
+case "$(uname -m)" in
+  x86_64|amd64)   arch='x64' ;;
+  arm64|aarch64)  arch='arm64' ;;
+esac
+
+BIN="$BIN_DIR/betterleaks$exe"
+
+if [ ! -x "$BIN" ]; then
+  if [ -z "$os" ] || [ -z "$arch" ]; then
+    warn "Could not detect your operating system, so the secret check was skipped."
+    warn "GitHub's safety net will still check everything after you save."
+    exit 0
+  fi
+
+  echo "Setting up Aampere's secret protection (one-time download)…"
+  mkdir -p "$BIN_DIR"
+  asset="betterleaks_${BL_VERSION}_${os}_${arch}.${ext}"
+  url="https://github.com/betterleaks/betterleaks/releases/download/v${BL_VERSION}/${asset}"
+  tmpdir="$(mktemp -d)"
+
+  if curl -fsSL --connect-timeout 10 "$url" -o "$tmpdir/$asset"; then
+    if [ "$ext" = 'zip' ]; then
+      if command -v unzip >/dev/null 2>&1; then
+        unzip -q -o "$tmpdir/$asset" -d "$tmpdir"
+      elif command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -NoProfile -Command \
+          "Expand-Archive -LiteralPath '$(cygpath -w "$tmpdir/$asset")' -DestinationPath '$(cygpath -w "$tmpdir")' -Force" \
+          >/dev/null 2>&1
+      fi
+    else
+      tar -xzf "$tmpdir/$asset" -C "$tmpdir"
+    fi
+    if [ -f "$tmpdir/betterleaks$exe" ]; then
+      mv "$tmpdir/betterleaks$exe" "$BIN"
+      chmod +x "$BIN"
+      echo "✅ Secret protection is ready."
+    fi
+  fi
+  rm -rf "$tmpdir"
+fi
+
+if [ ! -x "$BIN" ]; then
+  # Fail OPEN here on purpose: never hard-block someone who is offline.
+  # GitHub's server-side scan (CI) is the safety net that always runs.
+  warn "The secret scanner could not be downloaded right now (are you offline?)."
+  warn "Your save was allowed, and GitHub's safety net will still check it."
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Refresh the central Aampere rules + standards (tolerate offline with cache)
+# ---------------------------------------------------------------------------
+mkdir -p "$CACHE_DIR"
+fetch_central() { # $1 = file in aampere-standards repo, $2 = local destination
+  if gh api "repos/$ORG/$STANDARDS_REPO/contents/$1" \
+       -H "Accept: application/vnd.github.raw" \
+       > "$2.tmp" 2>/dev/null && [ -s "$2.tmp" ]; then
+    mv "$2.tmp" "$2"
+  else
+    rm -f "$2.tmp"
+  fi
+}
+if command -v gh >/dev/null 2>&1; then
+  fetch_central "betterleaks.toml" "$RULES_CACHE"
+  fetch_central "standards.md" "$CACHE_DIR/standards.md"
+fi
+
+# ---------------------------------------------------------------------------
+# 2b. Keep the copies committed in THIS repo in sync. This is how rule and
+# standards updates reach CI and Claude sessions with zero admin work and no
+# tokens: the freshest copy simply rides along with the user's next save.
+# ---------------------------------------------------------------------------
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+sync_into_repo() { # $1 = fresh local file, $2 = repo-relative path
+  if [ -n "$repo_root" ] && [ -f "$1" ] && ! cmp -s "$1" "$repo_root/$2" 2>/dev/null; then
+    mkdir -p "$repo_root/$(dirname "$2")"
+    cp "$1" "$repo_root/$2"
+    git add "$2" 2>/dev/null || true
+    printf 'ℹ️  Updated Aampere standards were included in this save (%s).\n' "$2"
+  fi
+}
+sync_into_repo "$RULES_CACHE" ".betterleaks.toml"
+sync_into_repo "$CACHE_DIR/standards.md" ".aampere/standards.md"
+
+# Rule source for this scan: fresh cache → copy committed in the repo → built-in.
+# (Portable empty-arg handling: macOS ships bash 3.2.)
+if [ -f "$RULES_CACHE" ]; then
+  set -- -c "$RULES_CACHE"
+elif [ -n "$repo_root" ] && [ -f "$repo_root/.betterleaks.toml" ]; then
+  set -- -c "$repo_root/.betterleaks.toml"
+else
+  warn "Aampere's custom rules are not available yet — scanning with built-in rules."
+  set --
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Scan the staged changes (exactly what is about to be saved)
+# ---------------------------------------------------------------------------
+"$BIN" git --staged --no-banner --redact -v --exit-code 99 "$@" .
+status=$?
+
+if [ "$status" -eq 0 ]; then
+  exit 0
+fi
+
+if [ "$status" -eq 99 ]; then
+  cat >&2 <<'EOF'
+
+──────────────────────────────────────────────────────────────────────
+❌ SAVE BLOCKED — it looks like a password or API key is in your changes.
+
+Nothing was saved. Here is how to fix it:
+
+  1. Look at the finding(s) listed above — each one shows a file and
+     a line number.
+  2. Open that file and remove the secret value from the code.
+  3. Put the real value in your .env file instead (that file stays on
+     your computer and is never saved to GitHub).
+  4. In .env.example, add the same variable with a placeholder,
+     for example:  MY_API_KEY=your-key-here
+  5. Save again.
+
+Not sure what to do? Ask Claude: "help me fix a blocked save" —
+or send Marco a message.
+──────────────────────────────────────────────────────────────────────
+EOF
+  exit 1
+fi
+
+# Any other exit code = the scanner itself had a technical problem.
+# Fail OPEN with a warning — GitHub's safety net re-checks everything.
+warn "The secret scanner hit a technical problem (this is NOT a secret finding)."
+warn "Your save was allowed, and GitHub's safety net will still check it."
+exit 0

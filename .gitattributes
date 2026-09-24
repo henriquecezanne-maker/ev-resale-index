@@ -1,0 +1,4 @@
+# Keep shell scripts LF so they run correctly on every platform (incl. Git Bash on Windows)
+* text=auto
+*.sh text eol=lf
+scripts/pre-commit text eol=lf
