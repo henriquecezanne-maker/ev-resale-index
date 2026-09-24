@@ -158,3 +158,46 @@ export function isInResidualAgeWindow(deal: Deal): boolean {
 export function monthKey(date: Date): string {
   return `${date.getUTCFullYear().toString()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 }
+
+/** Compact per-deal row shape embedded into the internal dashboard for client-side filtering. Short keys keep the payload small across ~4,800 rows. */
+export interface ClientDeal {
+  b: string; // brand
+  m: string; // model
+  mo: string; // month key (YYYY-MM)
+  bi: number; // bids
+  km: number;
+  ag: number; // age years
+  bk: number; // battery kWh
+  pk: number; // power kW
+  lp: number; // list price
+  se: number; // special equipment
+  np: number; // new price
+  hb: number; // highest bid corrected
+  hr: number; // highest bid raw
+  af: boolean; // accident free
+  tx: string; // taxation
+  dk: number | null; // datek proxy
+  rv: number; // residual %
+}
+
+export function toClientDeal(deal: Deal): ClientDeal {
+  return {
+    b: deal.brand,
+    m: deal.model,
+    mo: monthKey(deal.endDate),
+    bi: deal.bids,
+    km: deal.km,
+    ag: Math.round(deal.ageYears * 100) / 100,
+    bk: deal.batteryKwh,
+    pk: deal.powerKw,
+    lp: deal.listPrice,
+    se: deal.specialEquipment,
+    np: deal.newPrice,
+    hb: deal.highestBid,
+    hr: deal.highestBidRaw,
+    af: deal.accidentFree,
+    tx: deal.taxation,
+    dk: deal.datekProxy,
+    rv: Math.round(deal.residualPct * 100) / 100,
+  };
+}

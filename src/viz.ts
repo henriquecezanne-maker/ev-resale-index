@@ -1,9 +1,14 @@
-import type { Deal } from './load.js';
-import { monthKey } from './load.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { ClientDeal, Deal } from './load.js';
+import { monthKey, toClientDeal } from './load.js';
 import { buildMonthlyIndex, KWH_BANDS } from './pricing.js';
 import { brandResidualRanking, fitExponential, fitLinear, residualPoints } from './residual.js';
 import { countByBand, countByCountry, DATEK_BANDS, KM_BANDS } from './mix.js';
 import { bootstrapMedianCI, mannWhitneyU, trafficLight } from './validate.js';
+
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -12,10 +17,6 @@ function escapeHtml(s: string): string {
 /** Explicit number->string conversion for template literals (avoids implicit-coercion lint errors). */
 function num(n: number): string {
   return n.toString();
-}
-
-function fmtEur(n: number): string {
-  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(Math.round(n)) + ' €';
 }
 
 function fmtPct(n: number, digits = 1): string {
@@ -27,6 +28,10 @@ interface DashboardData {
   totalRows: number;
   droppedRows: number;
   cleanedN: number;
+  clientDeals: ClientDeal[];
+  baseMonth: string;
+  latestMonth: string;
+  latestMonthPartial: boolean;
   monthlyIndex: ReturnType<typeof buildMonthlyIndex>;
   rawChangeSinceJan: number;
   weightedChangeSinceJan: number;
@@ -55,6 +60,14 @@ export function computeDashboardData(deals: Deal[], totalRows: number, droppedRo
   const last = monthlyIndex[monthlyIndex.length - 1];
   const rawChangeSinceJan = last ? last.indexRaw - 100 : 0;
   const weightedChangeSinceJan = last?.indexWeighted !== null && last?.indexWeighted !== undefined ? last.indexWeighted - 100 : 0;
+
+  const sortedByEnd = [...deals].sort((a, b) => a.endDate.getTime() - b.endDate.getTime());
+  const latestDeal = sortedByEnd[sortedByEnd.length - 1];
+  const latestMonth = latestDeal ? monthKey(latestDeal.endDate) : '';
+  const latestMonthPartial = latestDeal
+    ? latestDeal.endDate.getUTCDate() <
+      new Date(Date.UTC(latestDeal.endDate.getUTCFullYear(), latestDeal.endDate.getUTCMonth() + 1, 0)).getUTCDate()
+    : false;
 
   const rvPoints = residualPoints(deals);
   const residualCurve = {
@@ -113,6 +126,10 @@ export function computeDashboardData(deals: Deal[], totalRows: number, droppedRo
     totalRows,
     droppedRows,
     cleanedN: deals.length,
+    clientDeals: deals.map(toClientDeal),
+    baseMonth: '2026-01',
+    latestMonth,
+    latestMonthPartial,
     monthlyIndex,
     rawChangeSinceJan,
     weightedChangeSinceJan,
@@ -189,26 +206,6 @@ function lineChartSvg(points: Array<{ x: number; y: number; label: string; relia
   </svg>`;
 }
 
-function barChartSvg(bars: Array<{ label: string; value: number }>, width = 1000, height = 260): string {
-  const padding = { top: 20, right: 20, bottom: 40, left: 20 };
-  const maxVal = Math.max(...bars.map((b) => b.value), 0.01);
-  const barWidth = (width - padding.left - padding.right) / bars.length;
-  const bodyHeight = height - padding.top - padding.bottom;
-
-  const rects = bars
-    .map((b, i) => {
-      const h = (b.value / maxVal) * bodyHeight;
-      const x = padding.left + i * barWidth + barWidth * 0.1;
-      const y = padding.top + (bodyHeight - h);
-      const w = barWidth * 0.8;
-      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#4f8ff7" rx="3"><title>${escapeHtml(b.label)}: ${(b.value * 100).toFixed(1)}%</title></rect>
-        <text x="${(x + w / 2).toFixed(1)}" y="${num(height - 12)}" font-size="11" text-anchor="middle" opacity="0.6">${escapeHtml(b.label)}</text>`;
-    })
-    .join('');
-
-  return `<svg viewBox="0 0 ${num(width)} ${num(height)}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
-}
-
 function residualCurveSvg(
   points: Array<{ t: number; rv: number }>,
   fit: ReturnType<typeof fitExponential>,
@@ -241,129 +238,242 @@ function residualCurveSvg(
   </svg>`;
 }
 
+function readClientAsset(filename: string): string {
+  return readFileSync(join(MODULE_DIR, 'client', filename), 'utf-8');
+}
+
 export function renderInternalDashboard(data: DashboardData): string {
-  const chartPoints = data.monthlyIndex.map((m) => ({ x: 0, y: m.indexRaw, label: m.month, reliable: m.reliable }));
-  const weightedChartPoints = data.monthlyIndex
-    .filter((m) => m.indexWeighted !== null)
-    .map((m) => ({ x: 0, y: m.indexWeighted as number, label: m.month, reliable: m.reliable }));
+  const css = readClientAsset('dashboard.css');
+  const js = readClientAsset('dashboard.js');
+  const exportDate = new Date(data.generatedAt);
+  const exportDateLabel = exportDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const brandRows = data.brandRanking
-    .slice(0, 30)
+  const mileageBandCheckboxes = ['0-10k', '10-20k', '20-30k', '30-40k', '40-50k', '50-60k', '60-70k', '70k+']
     .map(
-      (b) => `<tr><td>${escapeHtml(b.brand)}</td><td>${num(b.n)}</td><td>${b.medianResidualAt3to4y !== null ? fmtPct(b.medianResidualAt3to4y) : '–'}</td><td>${b.linearFit ? fmtPct(b.linearFit.b) + '/Jahr' : '–'}</td><td>${b.linearFit ? b.linearFit.r2.toFixed(2) : '–'}</td></tr>`,
+      (label) =>
+        `<div class="band-row"><label><input type="checkbox" data-mileage-band="${label}" checked/> ${label}</label><span class="count" data-mileage-count="${label}"></span></div>`,
     )
     .join('');
-
-  const monthRows = data.monthlyIndex
-    .map(
-      (m) =>
-        `<tr class="${m.reliable ? '' : 'unreliable'}"><td>${m.month}</td><td>${num(m.n)}</td><td>${fmtEur(m.medianBid)}</td><td>${m.indexRaw.toFixed(1)}</td><td>${m.indexWeighted !== null ? m.indexWeighted.toFixed(1) : '–'}</td></tr>`,
-    )
-    .join('');
-
-  const countryRows = data.countryMix
-    .map((c) => `<tr><td>${escapeHtml(c.label)}</td><td>${num(c.n)}</td><td>${fmtPct(c.share * 100)}</td></tr>`)
-    .join('');
-
-  const teslaSection = data.teslaValidation
-    ? `<section>
-        <h2>Validierungsbeispiel: Tesla Q1 vs. Q3</h2>
-        <div class="grid">
-          <div class="card"><div class="label">Q1 (Jan–Mär), n=${num(data.teslaValidation.q1.n)}</div><div class="big">${fmtEur(data.teslaValidation.q1.medianVal)}</div><div class="muted">KI ${fmtEur(data.teslaValidation.q1.ciLow)} – ${fmtEur(data.teslaValidation.q1.ciHigh)}</div></div>
-          <div class="card"><div class="label">Q3 (Jul–Sep), n=${num(data.teslaValidation.q3.n)}</div><div class="big">${fmtEur(data.teslaValidation.q3.medianVal)}</div><div class="muted">KI ${fmtEur(data.teslaValidation.q3.ciLow)} – ${fmtEur(data.teslaValidation.q3.ciHigh)}</div></div>
-          <div class="card"><div class="label">Mann-Whitney p-Wert</div><div class="big">${data.teslaValidation.p < 0.001 ? '<0,001' : data.teslaValidation.p.toFixed(3)}</div><div class="muted">Effektstärke ${data.teslaValidation.effectSize.toFixed(2)}</div></div>
-          <div class="card"><div class="label">Ampel</div><div class="big"><span class="light ${data.teslaValidation.light}"></span>${data.teslaValidation.light}</div></div>
-        </div>
-      </section>`
-    : '';
 
   return `<!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>EV Resale Index — Intern</title>
-<style>${PAGE_STYLE}</style>
+<title>EV Auction Price Index — Internal</title>
+<style>${css}</style>
 </head>
 <body>
-<header>
-  <div class="nav"><a href="index.html">Intern</a><a href="press.html">Presse</a></div>
-  <h1>EV Resale Index — Internes Dashboard</h1>
-  <div class="sub">${num(data.cleanedN)} bereinigte Auktionen (von ${num(data.totalRows)} exportierten, ${num(data.droppedRows)} verworfen) · generiert ${new Date(data.generatedAt).toLocaleString('de-DE')}</div>
-</header>
-<main>
+<div class="nav"><a href="index.html">Internal</a><a href="press.html">Press</a></div>
 
-<section>
-  <h2>Preisindex (Median, Januar 2026 = 100)</h2>
-  <div class="grid">
-    <div class="card"><div class="label">Roh, seit Januar</div><div class="big">${data.rawChangeSinceJan >= 0 ? '+' : ''}${fmtPct(data.rawChangeSinceJan)}</div></div>
-    <div class="card"><div class="label">Mix-bereinigt (kWh-gewichtet), seit Januar</div><div class="big">${data.weightedChangeSinceJan >= 0 ? '+' : ''}${fmtPct(data.weightedChangeSinceJan)}</div></div>
+<header class="page-header">
+  <div>
+    <div class="eyebrow">⚡ Electric Vehicle Market Data</div>
+    <h1>EV Auction Price Index</h1>
+    <div class="page-sub">Where the market actually clears. Built from the highest bid on every electric-vehicle auction on our platform — the price real buyers commit to.</div>
   </div>
-  ${lineChartSvg(chartPoints)}
-  <p class="muted">Gestrichelte Linie = Basislinie 100. Graue/blasse Punkte = Monate mit n &lt; 5 (unsicher).</p>
-  <h3 style="font-size:0.95rem; margin-top:1.5rem;">Mix-bereinigt (kWh-gewichtet)</h3>
-  ${lineChartSvg(weightedChartPoints)}
-  <table>
-    <thead><tr><th>Monat</th><th>n</th><th>Median-Gebot</th><th>Index roh</th><th>Index gewichtet</th></tr></thead>
-    <tbody>${monthRows}</tbody>
-  </table>
-</section>
+  <div class="export-badge">
+    <div><span class="dot"></span>Metabase export ${exportDateLabel}</div>
+    <b>${num(data.cleanedN)} EV auctions</b>
+  </div>
+</header>
 
-<section>
-  <h2>Restwertkurve (Markt)</h2>
-  <p class="muted">Exponential-Fit: RV = ${data.residualCurve.exponential.a.toFixed(1)} · e^(−${data.residualCurve.exponential.b.toFixed(3)}·t), R² = ${data.residualCurve.exponential.r2.toFixed(2)} · n = ${num(data.residualCurve.n)}</p>
-  <p class="muted">Linear: RV = ${data.residualCurve.linear.a.toFixed(1)} − ${data.residualCurve.linear.b.toFixed(2)}·t, R² = ${data.residualCurve.linear.r2.toFixed(2)}</p>
-</section>
+<main>
+  <aside class="filters-panel">
+    <h3>Filters</h3>
+    <h4>Refine the sample</h4>
+    <p class="desc">Everything is included by default. Every change updates the charts and table live.</p>
+    <div class="btn-row">
+      <button class="btn primary" id="btn-preset-robust">Robust index preset</button>
+      <button class="btn" id="btn-reset">Reset</button>
+    </div>
+    <p class="preset-note">≥2 bids · accident-free · list price ≤ €60k</p>
 
-<section>
-  <h2>Restwert je Marke (bei 3–4 Jahren, n ≥ 60)</h2>
-  <table>
-    <thead><tr><th>Marke</th><th>n</th><th>Median-Restwert 3–4J</th><th>Slope (Verlust/Jahr)</th><th>R²</th></tr></thead>
-    <tbody>${brandRows}</tbody>
-  </table>
-</section>
+    <div class="filter-group">
+      <div class="filter-group-title">Accidents</div>
+      <div class="segmented">
+        <button data-accident="all" class="active">All</button>
+        <button data-accident="free">Accident-free</button>
+        <button data-accident="with">With accident</button>
+      </div>
+    </div>
 
-<section>
-  <h2>Mix: Batterie (kWh)</h2>
-  ${barChartSvg(data.kwhMix.map((b) => ({ label: b.label, value: b.share })))}
-</section>
+    <div class="filter-group">
+      <div class="filter-group-title">Mileage bands <span class="all-link">all</span></div>
+      ${mileageBandCheckboxes}
+    </div>
 
-<section>
-  <h2>Mix: DAT-EK-Proxy (€)</h2>
-  ${barChartSvg(data.datekMix.map((b) => ({ label: b.label, value: b.share })))}
-  <p class="muted">DAT-EK ist ein Näherungswert (Mitte der Valuation Range); Coverage variiert über Monate.</p>
-</section>
+    <div class="filter-group">
+      <div class="filter-group-title">Minimum number of bids</div>
+      <input type="number" class="number-input" id="input-min-bids" min="0" value="0"/>
+    </div>
 
-<section>
-  <h2>Mix: Laufleistung (km)</h2>
-  ${barChartSvg(data.kmMix.map((b) => ({ label: b.label, value: b.share })))}
-</section>
+    <div class="csv-toggle" id="csv-load-toggle">▸ Load your own data (CSV)</div>
+    <div class="csv-panel" id="csv-load-panel">
+      <p>Session only — nothing is uploaded or saved. Needs the same columns as a Metabase "without_filters" export.</p>
+      <input type="file" id="csv-file-input" accept=".csv"/>
+      <div id="csv-load-status"></div>
+    </div>
+  </aside>
 
-<section>
-  <h2>Herkunftsland</h2>
-  <table>
-    <thead><tr><th>Land</th><th>n</th><th>Anteil</th></tr></thead>
-    <tbody>${countryRows}</tbody>
-  </table>
-</section>
+  <div class="headline-card">
+    <div>
+      <div class="headline-num" id="headline-index">–</div>
+      <div class="headline-num-label">Base Jan '26 = 100 · median highest bid</div>
+    </div>
+    <div class="headline-right">
+      <span class="delta-badge up" id="headline-delta-badge">▲ <span id="headline-delta">–</span></span>
+      <p id="headline-text">Computing…</p>
+      <div id="chart-headline-spark"></div>
+    </div>
+  </div>
 
-${teslaSection}
+  <div class="filter-note">
+    <span class="pill" id="sample-note">Showing all auctions</span>
+  </div>
 
-<section>
-  <h2>Vorbehalte</h2>
-  <ul class="muted">
-    <li>Selektions-Bias — nur Autos, die in die Auktion kamen; nicht der Gesamtmarkt.</li>
-    <li>Wholesale-Charakter — Auktionspreise, konservativ vs. Endkundenpreis.</li>
-    <li>Mix-Effekt — Gesamtindex nur bereinigt (mix-adjustiert) teilen.</li>
-    <li>Sonderausstattung nur ~51 % befüllt; leeres Feld wird hier als 0 € behandelt (offene Klärung mit Marco/Lukas).</li>
-    <li>DAT-EK nur Proxy (Range-Mitte), Coverage variiert.</li>
-    <li>September ist ein Teilmonat (bis 18.).</li>
-    <li>km ist ein schwacher Prädiktor für Restwert (R² ~0,06); Alter und km sind korreliert.</li>
-  </ul>
-</section>
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="label">Auctions in sample</div><div class="value" id="kpi-n">–</div></div>
+    <div class="kpi-card"><div class="label">Median highest bid</div><div class="value" id="kpi-median">–</div></div>
+    <div class="kpi-card"><div class="label">Average highest bid</div><div class="value" id="kpi-mean">–</div></div>
+    <div class="kpi-card"><div class="label">Period covered</div><div class="value">Jan '26 – ${escapeHtml(data.latestMonth.split('-')[1] ?? '')}'${escapeHtml(data.latestMonth.split('-')[0]?.slice(2) ?? '')}</div></div>
+  </div>
 
+  <section class="section-card">
+    <div class="section-label">Section 1 · Price level</div>
+    <h2 class="section-title">Highest bid over time</h2>
+    <p class="section-desc">Average and median winning bid per period, in euros. Bars behind show sample size (n). * Latest period is partial if the export cuts off mid-month.</p>
+    <div class="btn-row">
+      <div class="segmented" style="max-width:220px;"><button data-price-basis="corrected" class="active">Corrected</button><button data-price-basis="raw">Raw</button></div>
+      <div class="segmented" style="max-width:180px;"><button data-granularity="month" class="active">Month</button><button data-granularity="quarter">Quarter</button></div>
+    </div>
+    <div class="legend"><span><span class="legend-swatch" style="background:#0e6b60;"></span>Median</span><span><span class="legend-swatch" style="background:#e0913e;"></span>Average</span><span><span class="legend-swatch" style="background:#dbe4e8;"></span>Sample size (n)</span></div>
+    <div id="chart-price-level"></div>
+  </section>
+
+  <section class="section-card">
+    <div class="section-label">Section 2 · Development</div>
+    <h2 class="section-title">Price index — rebased to 100</h2>
+    <p class="section-desc">Base period Jan '26 = 100. A value of 104 means +4% vs the base; 96 means -4%.</p>
+    <div class="btn-row">
+      <div class="segmented" style="max-width:220px;"><button data-index-measure="median" class="active">Median</button><button data-index-measure="average">Average</button><button data-index-measure="both">Both</button></div>
+    </div>
+    <div id="chart-index"></div>
+  </section>
+
+  <section class="section-card">
+    <div class="section-label">Section 3 · Fleet profile</div>
+    <h2 class="section-title">What's behind the price — the cars themselves</h2>
+    <p class="section-desc">Median vehicle characteristics of the auctioned EVs per period. With no filters applied these are the raw fleet values.</p>
+    <div class="sub-grid">
+      <div class="sub-card"><div class="label">Median age</div><div class="value"><span id="stat-age">–</span> <span class="unit">months</span></div><div id="chart-age"></div></div>
+      <div class="sub-card"><div class="label">Median mileage</div><div class="value"><span id="stat-km">–</span> <span class="unit">km</span></div><div id="chart-km"></div></div>
+      <div class="sub-card"><div class="label">Median list price (new)</div><div class="value" id="stat-list">–</div><div id="chart-list"></div></div>
+      <div class="sub-card"><div class="label">Median battery size</div><div class="value"><span id="stat-battery">–</span> <span class="unit">kWh gross</span></div><div id="chart-battery"></div></div>
+      <div class="sub-card"><div class="label">Share accident-free</div><div class="value" id="stat-accidentfree">–</div><div id="chart-accidentfree"></div></div>
+    </div>
+  </section>
+
+  <section class="section-card">
+    <h2 class="section-title">Battery mix — share of auctions per 20 kWh band</h2>
+    <p class="section-desc">Share of auctions per battery band. Each column is one period and always sums to 100%.</p>
+    <div id="chart-battery-mix"></div>
+  </section>
+
+  <section class="section-card">
+    <h2 class="section-title">DAT-EK mix — share of auctions per price band</h2>
+    <p class="section-desc">Dealer-purchase-price proxy (midpoint of the valuation range). DAT-EK coverage varies by month.</p>
+    <div id="chart-datek-mix"></div>
+  </section>
+
+  <div class="context-panel">
+    <div class="context-tag">Context</div>
+    <h2 class="section-title">Why the fleet profile shifts from April</h2>
+    <div class="context-block">
+      <div class="k">What changed</div>
+      <p>We lowered the valuation for cheap cars — the delta to the DAT-EK valuation was set to −€2,200. Initially for cars with DAT-EK under €15,000, later extended to €20,000.</p>
+    </div>
+    <div class="context-block">
+      <div class="k">Why</div>
+      <p>For cheap cars, actual highest bids landed well below the middle of the valuation range — sellers were getting an unrealistic valuation vs. what buyers would actually pay. That mismatch meant fewer deals closed and the platform filled up with very cheap listings that rarely sold. Lowering the valuation better matches the achievable price range: fewer of these cars enter the funnel, the ones that remain have a higher chance of selling, and platform quality goes up.</p>
+    </div>
+    <div class="context-block">
+      <div class="k">Timeline</div>
+      <div class="timeline">
+        <div class="timeline-item"><b>26 Feb 2026</b>Issue identified &amp; change proposed</div>
+        <div class="timeline-item"><b>30 Mar 2026</b>Confirmed as effective — target of lowering the valuation worked</div>
+        <div class="timeline-item"><b>08 Apr 2026</b>Extended to cars up to €20,000 DAT-EK</div>
+      </div>
+    </div>
+    <div class="context-block">
+      <div class="k">Visible from</div>
+      <p>Auction data from <b>April 2026</b>. There are several weeks between valuation (M1) and auction end, so the effect only shows up with a delay. Concretely, the share of auctions with DAT-EK under €20,000 fell from ~44% (Feb/Mar) to ~28% (from April); median battery size, list price, and bid all rose over the same period. A noticeable part of the price rise since January is this deliberate mix shift — not pure market price appreciation.</p>
+    </div>
+    <span class="directional-tag">Directional — no controlled A/B test comparison against historical data</span>
+    <div class="source">Source &amp; details: Notion · "Increase Valuation for cheaper cars"</div>
+  </div>
+
+  <section class="section-card">
+    <div class="section-label">Section 4 · Brand &amp; origin</div>
+    <h2 class="section-title">Price &amp; mix by brand and country of origin</h2>
+    <p class="section-desc">Composition over time and key metrics per group. Switch between individual brands and the brand's country of origin.</p>
+    <div class="segmented" style="max-width:220px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button></div>
+    <div id="chart-brand-country"></div>
+    <h3 style="font-size:0.95rem; margin-top:1.3rem;">Metrics per group</h3>
+    <p class="section-desc">Base for Δ = Jan 2026 median vs latest period median.</p>
+    <table>
+      <thead><tr>
+        <th data-sort-table="brand-country" data-sort-col="label">Group</th><th data-sort-table="brand-country" data-sort-col="n">n</th><th>Share</th><th data-sort-table="brand-country" data-sort-col="medianBid">Median bid</th><th>Δ vs Jan</th><th>Age (mo)</th><th>Median km</th><th>Battery</th><th>Accident-free</th>
+      </tr></thead>
+      <tbody id="brand-country-table-body"></tbody>
+    </table>
+  </section>
+
+  <section class="section-card">
+    <div class="section-label">Breakdown</div>
+    <h2 class="section-title">Composition by period</h2>
+    <p class="section-desc">Brand mix, mileage coverage, and price for the filtered sample. Click a header to sort.</p>
+    <div class="segmented" style="max-width:180px; margin-bottom:0.8rem;">
+      <button data-granularity="month" class="active">Month</button><button data-granularity="quarter">Quarter</button>
+    </div>
+    <table>
+      <thead><tr>
+        <th data-sort-table="composition" data-sort-col="period">Period</th><th data-sort-table="composition" data-sort-col="n">n</th><th>Top brand</th><th data-sort-table="composition" data-sort-col="pctWithKm">% with km</th><th data-sort-table="composition" data-sort-col="avgKm">Avg km</th><th data-sort-table="composition" data-sort-col="medianKm">Median km</th><th data-sort-table="composition" data-sort-col="avgBid">Avg bid</th><th data-sort-table="composition" data-sort-col="medianBid">Median bid</th>
+      </tr></thead>
+      <tbody id="composition-table-body"></tbody>
+      <tfoot><tr id="composition-total-row"></tr></tfoot>
+    </table>
+  </section>
+
+  <section class="methodology-note">
+    <b>Methodology.</b> This index measures the highest (winning) bid on every EV auction — the clearest market signal we have for what buyers will actually pay. We use the pre-reconciled <b>corrected</b> bid column, which already harmonises the two tax regimes in our data (margin-taxed / Differenzbesteuerung and VAT-deductible / Regelbesteuerung), so gross vs. net is not re-derived here. The headline uses the <b>median</b> because auction prices are right-skewed and the median resists outliers; the average is shown alongside. The index in Section 2 rebases the median to <b>January 2026 = 100</b> (the earliest month in the data). Section 3 tracks the composition of the auctioned fleet (age, mileage, list price, battery, accident-free share) so price moves can be read against what was actually sold. Periods with fewer than 5 auctions are drawn dashed/greyed so small samples aren't over-read. All figures update live from the currently-selected auctions of ${num(data.cleanedN)} total; all filtering and statistics are computed in the browser from the raw rows.
+  </section>
+
+  <section class="caveats">
+    <b>Caveats</b>
+    <ul>
+      <li>Selection bias — only cars that entered the auction; not the whole market.</li>
+      <li>Wholesale character — auction prices, conservative vs. end-customer price.</li>
+      <li>Mix effect — share the overall index only mix-adjusted where possible.</li>
+      <li>Special equipment price is only ~51% filled; an empty field is treated as €0 here (open question for Marco/Lukas).</li>
+      <li>DAT-EK is only a proxy (midpoint of the valuation range); coverage varies by month.</li>
+      <li>The latest month in the export may be partial.</li>
+      <li>Mileage is a weak predictor of residual value (R² ~0.06); age and mileage are correlated.</li>
+    </ul>
+  </section>
 </main>
-<footer>EV Resale Index · Aampere · intern, nicht für externe Weitergabe ohne Presse-Ansicht</footer>
+
+<footer class="page-footer">EV Auction Price Index · figures reflect the currently applied filters · median used as the headline measure for robustness.</footer>
+
+<script>
+window.EV_DASHBOARD = {
+  deals: ${JSON.stringify(data.clientDeals)},
+  baseMonth: ${JSON.stringify(data.baseMonth)},
+  latestMonth: ${JSON.stringify(data.latestMonth)},
+  latestMonthPartial: ${JSON.stringify(data.latestMonthPartial)}
+};
+</script>
+<script>${js}</script>
 </body>
 </html>`;
 }
