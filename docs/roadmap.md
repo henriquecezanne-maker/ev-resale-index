@@ -45,14 +45,13 @@ breakdowns — following the methodology in `docs/methodology.md`.
 
 ## Status checklist
 
-- [ ] Scaffold project (this step)
-- [ ] Land first real Metabase CSV export into `data/`
-- [ ] Port field-mapping + cleaning (methodology §2–3) into `src/`
-- [ ] Port price index + mix weighting (methodology §4–5)
-- [ ] Port residual-value curve + brand ranking (methodology §6)
-- [ ] Port validation KPIs + traffic-light system (methodology §11)
-- [ ] Generate internal dashboard (reuse chart/interaction code from
-      `reference/original-mockup.html`)
-- [ ] Generate press dashboard (methodology §12)
+- [x] Scaffold project (this step)
+- [x] Land first real Metabase CSV export into `data/`
+- [x] Port field-mapping + cleaning (methodology §2–3) into `src/`
+- [x] Port price index + mix weighting (methodology §4–5)
+- [x] Port residual-value curve + brand ranking (methodology §6)
+- [x] Port validation KPIs + traffic-light system (methodology §11)
+- [x] Generate internal dashboard
+- [x] Generate press dashboard (methodology §12)
 - [ ] Wire up GitHub Pages deploy
 - [ ] Share first live link

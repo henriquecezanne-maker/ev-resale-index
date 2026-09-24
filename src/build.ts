@@ -1,10 +1,31 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { validateEnv } from './env.js';
+import { findLatestCsv, loadDeals } from './load.js';
+import { computeDashboardData, renderInternalDashboard, renderPressDashboard } from './viz.js';
 
 // Always validate secrets first — if something is missing, the app stops here
 // with a friendly message instead of crashing somewhere deep inside.
 // (This app currently needs no secrets, but every entry point checks anyway.)
 validateEnv();
 
+const dataDir = join(process.cwd(), 'data');
+const outputsDir = join(process.cwd(), 'outputs');
+
+const csvPath = findLatestCsv(dataDir);
+console.log(`Reading ${csvPath}`);
+
+const { deals, totalRows, droppedRows } = loadDeals(csvPath);
+console.log(`Loaded ${totalRows.toString()} rows, kept ${deals.length.toString()} after cleaning (${droppedRows.toString()} dropped).`);
+
+const data = computeDashboardData(deals, totalRows, droppedRows);
+
+mkdirSync(outputsDir, { recursive: true });
+writeFileSync(join(outputsDir, 'index.html'), renderInternalDashboard(data), 'utf-8');
+writeFileSync(join(outputsDir, 'press.html'), renderPressDashboard(data), 'utf-8');
+
+console.log(`Wrote ${join(outputsDir, 'index.html')}`);
+console.log(`Wrote ${join(outputsDir, 'press.html')}`);
 console.log(
-  'EV Resale Index build pipeline — not implemented yet. See docs/roadmap.md for the plan.',
+  `Index since Jan 2026: raw ${data.rawChangeSinceJan >= 0 ? '+' : ''}${data.rawChangeSinceJan.toFixed(1)}%, mix-adjusted ${data.weightedChangeSinceJan >= 0 ? '+' : ''}${data.weightedChangeSinceJan.toFixed(1)}%.`,
 );

@@ -36,7 +36,7 @@ flowchart TD
 
 | Component | What it does |
 |---|---|
-| `data/` | Versioned Metabase CSV exports (gitignored raw file, or committed snapshot — TBD in planning). |
+| `data/` | Versioned Metabase CSV exports (committed — the CSV snapshot is the source of truth for reproducible builds). |
 | `src/build.ts` | Entry point: reads the CSV, runs the pipeline below, writes static HTML to `outputs/`. |
 | `src/load.ts` | Field mapping, brand canonicalization, cleaning/filters (methodology §2–3). |
 | `src/index.ts` (pricing) | Price index + mix-adjustment weighting (methodology §4–5). |
