@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateEnv } from './env.js';
-import { findLatestCsv, loadDeals } from './load.js';
+import { findLatestCsv, loadDeals, loadRemovedAuctionKeys } from './load.js';
 import { computeDashboardData, renderInternalDashboard, renderPressDashboard } from './viz.js';
 
 // Always validate secrets first — if something is missing, the app stops here
@@ -18,7 +18,15 @@ console.log(`Reading ${csvPath}`);
 const { deals, totalRows, droppedRows } = loadDeals(csvPath);
 console.log(`Loaded ${totalRows.toString()} rows, kept ${deals.length.toString()} after cleaning (${droppedRows.toString()} dropped).`);
 
-const data = computeDashboardData(deals, totalRows, droppedRows);
+// Optional: auctions removed by the valuation-algorithm change (methodology §9).
+// Not every export has this file — only present when investigating the mix shift.
+const removedAuctionsPath = join(dataDir, 'entfernte_auktionen.csv');
+const removedAuctionKeys = existsSync(removedAuctionsPath) ? loadRemovedAuctionKeys(removedAuctionsPath) : new Set<string>();
+if (removedAuctionKeys.size > 0) {
+  console.log(`Loaded ${removedAuctionKeys.size.toString()} removed-auction keys from ${removedAuctionsPath}`);
+}
+
+const data = computeDashboardData(deals, totalRows, droppedRows, removedAuctionKeys);
 
 mkdirSync(outputsDir, { recursive: true });
 writeFileSync(join(outputsDir, 'index.html'), renderInternalDashboard(data), 'utf-8');

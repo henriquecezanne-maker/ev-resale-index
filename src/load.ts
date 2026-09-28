@@ -178,9 +178,56 @@ export interface ClientDeal {
   tx: string; // taxation
   dk: number | null; // datek proxy
   rv: number; // residual %
+  rm: boolean; // removed by the valuation-algorithm change (methodology §9) — excluded in the "comparable period" tab
 }
 
-export function toClientDeal(deal: Deal): ClientDeal {
+interface RemovedRow {
+  Monat: string;
+  Marke: string;
+  'Höchstgebot': string;
+  Listenpreis: string;
+  km: string;
+}
+
+/**
+ * Key used to match a deal against the removed-auctions export. Month + brand
+ * + highest bid alone has 26 collisions against the main export (two unrelated
+ * cars sharing brand/month/bid) — adding list price + mileage gives a clean
+ * 1:1 match for all 217 removed rows with zero collisions and zero misses
+ * (verified against the actual data during investigation).
+ */
+function removalKey(month: string, brand: string, highestBid: number, listPrice: number, km: number): string {
+  return `${month}|${brand}|${highestBid.toFixed(2)}|${listPrice.toFixed(2)}|${Math.round(km).toString()}`;
+}
+
+/**
+ * Loads the set of auctions removed from the platform by the valuation-algorithm
+ * change (methodology §9: lowering the DAT-EK valuation for cheap cars, first
+ * under €15k, later extended to €20k). Jan-Mar still contain these cars because
+ * the change only took effect gradually from late Feb; excluding them from ALL
+ * months (not just Jan-Mar) makes the fleet composition comparable across the
+ * whole period, isolating the real price signal from this deliberate mix shift.
+ */
+export function loadRemovedAuctionKeys(csvPath: string): Set<string> {
+  const raw = readFileSync(csvPath, 'utf-8');
+  const parsed = Papa.parse<RemovedRow>(raw, { header: true, skipEmptyLines: true });
+  const keys = new Set<string>();
+  for (const row of parsed.data) {
+    const month = row.Monat.trim();
+    const brand = canonicalizeBrand(row.Marke.trim());
+    const highestBid = toNumber(row['Höchstgebot']);
+    const listPrice = toNumber(row.Listenpreis);
+    const km = toNumber(row.km);
+    keys.add(removalKey(month, brand, highestBid, listPrice, km));
+  }
+  return keys;
+}
+
+export function isRemovedAuction(deal: Deal, removedKeys: Set<string>): boolean {
+  return removedKeys.has(removalKey(monthKey(deal.endDate), deal.brand, deal.highestBid, deal.listPrice, deal.km));
+}
+
+export function toClientDeal(deal: Deal, removedKeys: Set<string>): ClientDeal {
   return {
     b: deal.brand,
     m: deal.model,
@@ -199,5 +246,6 @@ export function toClientDeal(deal: Deal): ClientDeal {
     tx: deal.taxation,
     dk: deal.datekProxy,
     rv: Math.round(deal.residualPct * 100) / 100,
+    rm: isRemovedAuction(deal, removedKeys),
   };
 }

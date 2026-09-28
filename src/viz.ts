@@ -65,7 +65,12 @@ interface DashboardData {
   } | null;
 }
 
-export function computeDashboardData(deals: Deal[], totalRows: number, droppedRows: number): DashboardData {
+export function computeDashboardData(
+  deals: Deal[],
+  totalRows: number,
+  droppedRows: number,
+  removedAuctionKeys: Set<string>,
+): DashboardData {
   const monthlyIndex = buildMonthlyIndex(deals);
   const last = monthlyIndex[monthlyIndex.length - 1];
   const rawChangeSinceJan = last ? last.indexRaw - 100 : 0;
@@ -136,7 +141,7 @@ export function computeDashboardData(deals: Deal[], totalRows: number, droppedRo
     totalRows,
     droppedRows,
     cleanedN: deals.length,
-    clientDeals: deals.map(toClientDeal),
+    clientDeals: deals.map((d) => toClientDeal(d, removedAuctionKeys)),
     baseMonth: '2026-01',
     latestMonth,
     latestMonthPartial,
@@ -287,6 +292,12 @@ export function renderInternalDashboard(data: DashboardData): string {
     <b>${num(data.cleanedN)} EV auctions</b>
   </div>
 </header>
+
+<div class="dataset-tabs">
+  <button class="dataset-tab active" data-dataset="all">All auctions</button>
+  <button class="dataset-tab" data-dataset="comparable">Comparable period <span id="removed-count-badge"></span></button>
+  <span class="dataset-tabs-note" id="dataset-tabs-note"></span>
+</div>
 
 <main>
   <aside class="filters-panel">

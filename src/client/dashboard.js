@@ -103,6 +103,7 @@
   });
 
   var state = {
+    dataset: 'all', // all | comparable (excludes auctions removed by the valuation-algorithm change, methodology §9)
     accident: 'all', // all | free | with
     mileageBands: null, // null = all
     ageRange: [0, Math.ceil(ageMax * 12) / 12],
@@ -156,6 +157,7 @@
 
   function applyFilters() {
     return ALL_DATA.filter(function (d) {
+      if (state.dataset === 'comparable' && d.rm) return false;
       if (state.accident === 'free' && !d.af) return false;
       if (state.accident === 'with' && d.af) return false;
       if (state.mileageBands) {
@@ -409,6 +411,7 @@
 
   function applyFiltersExceptMileage() {
     return ALL_DATA.filter(function (d) {
+      if (state.dataset === 'comparable' && d.rm) return false;
       if (state.accident === 'free' && !d.af) return false;
       if (state.accident === 'with' && d.af) return false;
       if (d.ag < state.ageRange[0] || d.ag > state.ageRange[1]) return false;
@@ -744,6 +747,14 @@
   }
 
   function wireControls() {
+    document.querySelectorAll('[data-dataset]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.dataset = btn.getAttribute('data-dataset');
+        document.querySelectorAll('[data-dataset]').forEach(function (b) { b.classList.toggle('active', b === btn); });
+        render();
+      });
+    });
+
     document.querySelectorAll('[data-accident]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.accident = btn.getAttribute('data-accident');
@@ -839,6 +850,13 @@
             var parsed = parseCsvInBrowser(String(reader.result));
             ALL_DATA = parsed;
             document.getElementById('csv-load-status').textContent = 'Loaded ' + parsed.length + ' rows from ' + file.name + ' (session only, not saved).';
+            // A freshly loaded CSV has no removed-auction data, so the "Comparable
+            // period" tab would be indistinguishable from "All auctions" — avoid
+            // that silent confusion by switching back to "All auctions".
+            state.dataset = 'all';
+            document.querySelectorAll('[data-dataset]').forEach(function (b) {
+              b.classList.toggle('active', b.getAttribute('data-dataset') === 'all');
+            });
             applyPreset('reset');
           } catch (err) {
             document.getElementById('csv-load-status').textContent = 'Could not parse this file: ' + err.message;
@@ -893,6 +911,9 @@
         tx: get('Deal → Taxation').trim(),
         dk: vMin !== null && vMax !== null ? (vMin + vMax) / 2 : null,
         rv: newPrice > 0 ? Math.round((bid / newPrice) * 10000) / 100 : 0,
+        // A freshly loaded CSV has no way to know which rows the valuation-algorithm
+        // change would remove — the "Comparable period" tab has nothing to exclude.
+        rm: false,
       });
     }
     if (out.length === 0) throw new Error('no valid rows found');
@@ -926,7 +947,20 @@
 
   // ---- Main render ---------------------------------------------------------
 
+  function renderDatasetTabs() {
+    var removedTotal = ALL_DATA.filter(function (d) { return d.rm; }).length;
+    var badge = document.getElementById('removed-count-badge');
+    if (badge) badge.textContent = removedTotal > 0 ? '(-' + fmtNum(removedTotal) + ')' : '';
+    var note = document.getElementById('dataset-tabs-note');
+    if (note) {
+      note.textContent = state.dataset === 'comparable'
+        ? 'Excludes ' + fmtNum(removedTotal) + ' auctions removed by the valuation-algorithm change (Feb-Apr \'26) from every month, so the fleet mix is comparable throughout.'
+        : 'Includes auctions later removed by the valuation-algorithm change — Jan-Mar is skewed toward cheap cars that later months don’t have.';
+    }
+  }
+
   function render() {
+    renderDatasetTabs();
     var filtered = applyFilters();
     renderKpis(filtered);
     renderMileageCounts();

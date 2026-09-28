@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findLatestCsv, loadDeals, monthKey } from './load.js';
+import { findLatestCsv, isRemovedAuction, loadDeals, loadRemovedAuctionKeys, monthKey } from './load.js';
 
 const HEADER = [
   'ID',
@@ -192,5 +192,105 @@ describe('findLatestCsv', () => {
 describe('monthKey', () => {
   it('formats as YYYY-MM in UTC', () => {
     expect(monthKey(new Date('2026-09-18T09:00:00Z'))).toBe('2026-09');
+  });
+});
+
+describe('loadRemovedAuctionKeys / isRemovedAuction', () => {
+  let dir: string;
+
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('matches deals removed by the valuation-algorithm change on month+brand+bid+listPrice+km', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ev-resale-test-'));
+    const removedCsv = [
+      'Monat,Marke,Modell,Variante,DAT EK (Proxy),Höchstgebot,Listenpreis,Batterie kWh,km,Leistung kW',
+      '2026-02,Smart,forfour,EQ(453.091),5600.0,3700.0,22031,17.6,50000,60.0',
+    ].join('\n');
+    writeFileSync(join(dir, 'entfernte_auktionen.csv'), removedCsv, 'utf-8');
+
+    const keys = loadRemovedAuctionKeys(join(dir, 'entfernte_auktionen.csv'));
+    expect(keys.size).toBe(1);
+
+    const row = makeRow({
+      'End Time': '2026-02-15T10:00:00Z',
+      'Deal → Make': 'Smart',
+      'Deal → First Registration': '2023-01-01',
+      'Highest Bid corrected': '3700',
+      'Deal → List Price': '22031',
+      'Deal → Mileage': '50000',
+    });
+    writeCsv(dir, 'export.csv', [row]);
+    const { deals } = loadDeals(join(dir, 'export.csv'));
+    expect(deals).toHaveLength(1);
+    for (const deal of deals) {
+      expect(isRemovedAuction(deal, keys)).toBe(true);
+    }
+  });
+
+  it('does not match deals in a different month or with a different highest bid', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ev-resale-test-'));
+    const removedCsv = [
+      'Monat,Marke,Modell,Variante,DAT EK (Proxy),Höchstgebot,Listenpreis,Batterie kWh,km,Leistung kW',
+      '2026-02,Smart,forfour,EQ(453.091),5600.0,3700.0,22031,17.6,50000,60.0',
+    ].join('\n');
+    writeFileSync(join(dir, 'entfernte_auktionen.csv'), removedCsv, 'utf-8');
+    const keys = loadRemovedAuctionKeys(join(dir, 'entfernte_auktionen.csv'));
+
+    const differentMonth = makeRow({
+      'End Time': '2026-03-15T10:00:00Z',
+      'Deal → Make': 'Smart',
+      'Deal → First Registration': '2023-01-01',
+      'Highest Bid corrected': '3700',
+      'Deal → List Price': '22031',
+      'Deal → Mileage': '50000',
+    });
+    const differentBid = makeRow({
+      'End Time': '2026-02-15T10:00:00Z',
+      'Deal → Make': 'Smart',
+      'Deal → First Registration': '2023-01-01',
+      'Highest Bid corrected': '3701',
+      'Deal → List Price': '22031',
+      'Deal → Mileage': '50000',
+    });
+    writeCsv(dir, 'export.csv', [differentMonth, differentBid]);
+    const { deals } = loadDeals(join(dir, 'export.csv'));
+    expect(deals).toHaveLength(2);
+    expect(deals.every((d) => !isRemovedAuction(d, keys))).toBe(true);
+  });
+
+  it('disambiguates two deals sharing month+brand+highestBid by list price and mileage', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ev-resale-test-'));
+    const removedCsv = [
+      'Monat,Marke,Modell,Variante,DAT EK (Proxy),Höchstgebot,Listenpreis,Batterie kWh,km,Leistung kW',
+      '2026-02,Renault,Zoe,Life,10100.0,8400.0,29990,44.1,27500,80.0',
+    ].join('\n');
+    writeFileSync(join(dir, 'entfernte_auktionen.csv'), removedCsv, 'utf-8');
+    const keys = loadRemovedAuctionKeys(join(dir, 'entfernte_auktionen.csv'));
+
+    // Same month/brand/bid as the removed row, but a different car (different list price + km) — must NOT match.
+    const lookalike = makeRow({
+      'End Time': '2026-02-10T10:00:00Z',
+      'Deal → Make': 'Renault',
+      'Deal → First Registration': '2023-01-01',
+      'Highest Bid corrected': '8400',
+      'Deal → List Price': '37812',
+      'Deal → Mileage': '63000',
+    });
+    const actualRemoved = makeRow({
+      'End Time': '2026-02-20T10:00:00Z',
+      'Deal → Make': 'Renault',
+      'Deal → First Registration': '2023-01-01',
+      'Highest Bid corrected': '8400',
+      'Deal → List Price': '29990',
+      'Deal → Mileage': '27500',
+    });
+    writeCsv(dir, 'export.csv', [lookalike, actualRemoved]);
+    const { deals } = loadDeals(join(dir, 'export.csv'));
+    expect(deals).toHaveLength(2);
+    const flagged = deals.filter((d) => isRemovedAuction(d, keys));
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]?.listPrice).toBe(29990);
   });
 });
