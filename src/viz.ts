@@ -257,11 +257,17 @@ function readClientAsset(filename: string): string {
   return readFileSync(join(MODULE_DIR, 'client', filename), 'utf-8');
 }
 
-export function renderInternalDashboard(data: DashboardData): string {
+export interface InternalDashboardOptions {
+  /** Restricts the page to one brand (e.g. "Tesla") — swaps the Section 4 grouping to model-only and adjusts copy/nav. */
+  brand?: string;
+}
+
+export function renderInternalDashboard(data: DashboardData, opts: InternalDashboardOptions = {}): string {
   const css = readClientAsset('dashboard.css');
   const js = readClientAsset('dashboard.js');
   const exportDate = new Date(data.generatedAt);
   const exportDateLabel = exportDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const brand = opts.brand;
 
   const mileageBandCheckboxes = ['0-10k', '10-20k', '20-30k', '30-40k', '40-50k', '50-60k', '60-70k', '70k+']
     .map(
@@ -270,26 +276,36 @@ export function renderInternalDashboard(data: DashboardData): string {
     )
     .join('');
 
+  const navLinks = brand
+    ? `<a href="index.html">Internal</a><a href="tesla.html" class="active">${escapeHtml(brand)}</a><a href="press.html">Press</a>`
+    : `<a href="index.html" class="active">Internal</a><a href="tesla.html">Tesla</a><a href="press.html">Press</a>`;
+
+  const pageTitle = brand ? `${escapeHtml(brand)} Auction Price Index` : 'EV Auction Price Index';
+  const pageSub = brand
+    ? `Where the market actually clears — ${escapeHtml(brand)} only. Built from the highest bid on every ${escapeHtml(brand)} auction on our platform — the price real buyers commit to.`
+    : "Where the market actually clears. Built from the highest bid on every electric-vehicle auction on our platform — the price real buyers commit to.";
+  const auctionsLabel = brand ? `${escapeHtml(brand)} auctions` : 'EV auctions';
+
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>EV Auction Price Index — Internal</title>
+<title>${brand ? `${escapeHtml(brand)} Auction Price Index` : 'EV Auction Price Index — Internal'}</title>
 <style>${css}</style>
 </head>
 <body>
-<div class="nav"><a href="index.html">Internal</a><a href="press.html">Press</a></div>
+<div class="nav">${navLinks}</div>
 
 <header class="page-header">
   <div>
     <div class="eyebrow">⚡ Electric Vehicle Market Data</div>
-    <h1>EV Auction Price Index</h1>
-    <div class="page-sub">Where the market actually clears. Built from the highest bid on every electric-vehicle auction on our platform — the price real buyers commit to.</div>
+    <h1>${pageTitle}</h1>
+    <div class="page-sub">${pageSub}</div>
   </div>
   <div class="export-badge">
     <div><span class="dot"></span>Metabase export ${exportDateLabel}</div>
-    <b>${num(data.cleanedN)} EV auctions</b>
+    <b>${num(data.cleanedN)} ${auctionsLabel}</b>
   </div>
 </header>
 
@@ -437,10 +453,18 @@ export function renderInternalDashboard(data: DashboardData): string {
   </div>
 
   <section class="section-card">
-    <div class="section-label">Section 4 · Brand &amp; origin</div>
-    <h2 class="section-title">Price &amp; mix by brand and country of origin</h2>
-    <p class="section-desc">Composition over time and key metrics per group. Switch between individual brands and the brand's country of origin.</p>
-    <div class="segmented" style="max-width:220px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button></div>
+    <div class="section-label">Section 4 · ${brand ? 'Model' : 'Brand &amp; origin'}</div>
+    <h2 class="section-title">${brand ? 'Price &amp; mix by model' : 'Price &amp; mix by brand and country of origin'}</h2>
+    <p class="section-desc">${
+      brand
+        ? 'Composition over time and key metrics per model.'
+        : "Composition over time and key metrics per group. Switch between individual brands and the brand's country of origin."
+    }</p>
+    ${
+      brand
+        ? ''
+        : '<div class="segmented" style="max-width:220px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button></div>'
+    }
     <div class="legend" id="legend-brand-country"></div>
     <div id="chart-brand-country"></div>
     <h3 style="font-size:0.95rem; margin-top:1.3rem;">Metrics per group</h3>
@@ -487,14 +511,15 @@ export function renderInternalDashboard(data: DashboardData): string {
   </section>
 </main>
 
-<footer class="page-footer">EV Auction Price Index · figures reflect the currently applied filters · median used as the headline measure for robustness.</footer>
+<footer class="page-footer">${pageTitle} · figures reflect the currently applied filters · median used as the headline measure for robustness.</footer>
 
 <script>
 window.EV_DASHBOARD = {
   deals: ${JSON.stringify(data.clientDeals)},
   baseMonth: ${JSON.stringify(data.baseMonth)},
   latestMonth: ${JSON.stringify(data.latestMonth)},
-  latestMonthPartial: ${JSON.stringify(data.latestMonthPartial)}
+  latestMonthPartial: ${JSON.stringify(data.latestMonthPartial)},
+  defaultGroupBy: ${JSON.stringify(brand ? 'model' : 'country')}
 };
 </script>
 <script>${js}</script>

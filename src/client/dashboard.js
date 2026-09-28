@@ -115,7 +115,7 @@
     priceBasis: 'corrected', // corrected | raw
     periodGranularity: 'month', // month | quarter
     indexMeasure: 'median', // median | average | both
-    groupBy: 'country', // country | brand
+    groupBy: window.EV_DASHBOARD.defaultGroupBy || 'country', // country | brand | model
   };
 
   var MILEAGE_BANDS = [
@@ -592,8 +592,8 @@
     var keys = sortedKeys(byPeriod);
     var labels = keys.map(function (k) { return state.periodGranularity === 'quarter' ? quarterLabel(k) : monthLabel(k); });
 
-    var groupFn = state.groupBy === 'country'
-      ? function (d) { return brandCountry(d.b); }
+    var groupFn = state.groupBy === 'country' ? function (d) { return brandCountry(d.b); }
+      : state.groupBy === 'model' ? function (d) { return d.m; }
       : function (d) { return d.b; };
     var groups = {};
     filtered.forEach(function (d) {
@@ -602,7 +602,7 @@
       groups[g].push(d);
     });
     var groupNames = Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length; });
-    var topGroups = state.groupBy === 'brand' ? groupNames.slice(0, 10) : groupNames;
+    var topGroups = state.groupBy === 'country' ? groupNames : groupNames.slice(0, 10);
     var colors = topGroups.map(function (g, i) {
       return COUNTRY_COLORS[g] || ['#0b4f4a', '#14877e', '#e09a3e', '#5fb3ac', '#8a5fc9', '#c9515f', '#3f7f3a', '#b98d2a', '#2a5fb9', '#9aa3ab'][i % 10];
     });

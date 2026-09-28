@@ -42,6 +42,26 @@ function canonicalizeBrand(raw: string): string {
   return BRAND_CANONICALIZATION[trimmed] ?? BRAND_CANONICALIZATION[trimmed.toLowerCase()] ?? trimmed;
 }
 
+// Free-text model field has inconsistent facelift/variant suffixes and a German typo
+// ("Modell Y") — merge these down to the base model name so grouping by model
+// (Section 4 of the Tesla page) isn't fragmented across near-duplicate labels.
+const MODEL_CANONICALIZATION: Record<string, string> = {
+  'modell y': 'Model Y',
+  'model y - juniper': 'Model Y',
+  'model y juniper': 'Model Y',
+  'model 3 - highland': 'Model 3',
+  'model 3 highland': 'Model 3',
+  'model x 6 seater': 'Model X',
+  'model x 6-seater': 'Model X',
+  'model x (7 seater)': 'Model X',
+  'model x | 6 seater': 'Model X',
+};
+
+function canonicalizeModel(raw: string): string {
+  const trimmed = raw.trim();
+  return MODEL_CANONICALIZATION[trimmed.toLowerCase()] ?? trimmed;
+}
+
 function toNumber(value: string | undefined): number {
   if (value === undefined || value.trim() === '') return 0;
   const n = Number(value);
@@ -119,7 +139,7 @@ export function loadDeals(csvPath: string): { deals: Deal[]; totalRows: number; 
 
     deals.push({
       brand: canonicalizeBrand(make),
-      model: row['Deal → Model'].trim(),
+      model: canonicalizeModel(row['Deal → Model']),
       endDate,
       bids: toNumber(row['Number Of Bids']),
       km: toNumber(row['Deal → Mileage']),

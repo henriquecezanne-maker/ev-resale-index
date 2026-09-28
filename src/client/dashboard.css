@@ -25,6 +25,7 @@ body {
 .nav { max-width: 1180px; margin: 0 auto; padding: 1rem 1.5rem 0; }
 .nav a { color: var(--text-muted); text-decoration: none; margin-right: 1rem; font-size: 0.85rem; }
 .nav a:hover { color: var(--text); }
+.nav a.active { color: var(--accent-dark); font-weight: 700; }
 
 header.page-header {
   max-width: 1180px;

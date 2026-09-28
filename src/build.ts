@@ -28,11 +28,16 @@ if (removedAuctionKeys.size > 0) {
 
 const data = computeDashboardData(deals, totalRows, droppedRows, removedAuctionKeys);
 
+const teslaDeals = deals.filter((d) => d.brand === 'Tesla');
+const teslaData = computeDashboardData(teslaDeals, teslaDeals.length, 0, removedAuctionKeys);
+
 mkdirSync(outputsDir, { recursive: true });
 writeFileSync(join(outputsDir, 'index.html'), renderInternalDashboard(data), 'utf-8');
+writeFileSync(join(outputsDir, 'tesla.html'), renderInternalDashboard(teslaData, { brand: 'Tesla' }), 'utf-8');
 writeFileSync(join(outputsDir, 'press.html'), renderPressDashboard(data), 'utf-8');
 
 console.log(`Wrote ${join(outputsDir, 'index.html')}`);
+console.log(`Wrote ${join(outputsDir, 'tesla.html')} (${teslaDeals.length.toString()} Tesla auctions)`);
 console.log(`Wrote ${join(outputsDir, 'press.html')}`);
 console.log(
   `Index since Jan 2026: raw ${data.rawChangeSinceJan >= 0 ? '+' : ''}${data.rawChangeSinceJan.toFixed(1)}%, mix-adjusted ${data.weightedChangeSinceJan >= 0 ? '+' : ''}${data.weightedChangeSinceJan.toFixed(1)}%.`,
