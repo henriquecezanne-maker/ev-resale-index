@@ -34,6 +34,9 @@ const subsetPages: Array<{ slug: string; label: string; scopeLevel: 'brand' | 'm
   { slug: 'tesla', label: 'Tesla', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Tesla') },
   { slug: 'model-y', label: 'Model Y', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Tesla' && d.model === 'Model Y') },
   { slug: 'model-3', label: 'Model 3', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Tesla' && d.model === 'Model 3') },
+  { slug: 'ioniq-5', label: 'Ioniq 5', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Hyundai' && d.model === 'Ioniq 5') },
+  { slug: 'ev6', label: 'EV6', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Kia' && d.model === 'EV6') },
+  { slug: 'id3', label: 'ID.3', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Volkswagen' && d.model === 'ID.3') },
 ];
 const navLinks = subsetPages.map((p) => ({ slug: p.slug, label: p.label }));
 
