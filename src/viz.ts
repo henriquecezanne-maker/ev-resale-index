@@ -257,9 +257,21 @@ function readClientAsset(filename: string): string {
   return readFileSync(join(MODULE_DIR, 'client', filename), 'utf-8');
 }
 
+/** One entry in the nav bar for a brand/model-scoped page, e.g. { slug: 'tesla', label: 'Tesla' }. */
+export interface SubsetPageLink {
+  slug: string;
+  label: string;
+}
+
 export interface InternalDashboardOptions {
-  /** Restricts the page to one brand (e.g. "Tesla") — swaps the Section 4 grouping to model-only and adjusts copy/nav. */
-  brand?: string;
+  /** Restricts the page to one label (brand or model, e.g. "Tesla" or "Model Y") — adjusts copy. */
+  scopeLabel?: string;
+  /** 'brand': Section 4 groups by model. 'model': Section 4 is dropped entirely (nothing meaningful left to group by) and the composition table drops its "Top brand" column. */
+  scopeLevel?: 'brand' | 'model';
+  /** All brand/model-scoped pages to show in the nav (besides Internal/Press) — this page's own slug is highlighted active. */
+  subsetPages?: SubsetPageLink[];
+  /** This page's own slug within subsetPages, so the right nav link is marked active. */
+  ownSlug?: string;
 }
 
 export function renderInternalDashboard(data: DashboardData, opts: InternalDashboardOptions = {}): string {
@@ -267,7 +279,8 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
   const js = readClientAsset('dashboard.js');
   const exportDate = new Date(data.generatedAt);
   const exportDateLabel = exportDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  const brand = opts.brand;
+  const scopeLabel = opts.scopeLabel;
+  const subsetPages = opts.subsetPages ?? [];
 
   const mileageBandCheckboxes = ['0-10k', '10-20k', '20-30k', '30-40k', '40-50k', '50-60k', '60-70k', '70k+']
     .map(
@@ -276,22 +289,26 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
     )
     .join('');
 
-  const navLinks = brand
-    ? `<a href="index.html">Internal</a><a href="tesla.html" class="active">${escapeHtml(brand)}</a><a href="press.html">Press</a>`
-    : `<a href="index.html" class="active">Internal</a><a href="tesla.html">Tesla</a><a href="press.html">Press</a>`;
+  const navLinks = [
+    `<a href="index.html"${opts.ownSlug === undefined ? ' class="active"' : ''}>Internal</a>`,
+    ...subsetPages.map(
+      (p) => `<a href="${p.slug}.html"${p.slug === opts.ownSlug ? ' class="active"' : ''}>${escapeHtml(p.label)}</a>`,
+    ),
+    `<a href="press.html">Press</a>`,
+  ].join('');
 
-  const pageTitle = brand ? `${escapeHtml(brand)} Auction Price Index` : 'EV Auction Price Index';
-  const pageSub = brand
-    ? `Where the market actually clears — ${escapeHtml(brand)} only. Built from the highest bid on every ${escapeHtml(brand)} auction on our platform — the price real buyers commit to.`
+  const pageTitle = scopeLabel ? `${escapeHtml(scopeLabel)} Auction Price Index` : 'EV Auction Price Index';
+  const pageSub = scopeLabel
+    ? `Where the market actually clears — ${escapeHtml(scopeLabel)} only. Built from the highest bid on every ${escapeHtml(scopeLabel)} auction on our platform — the price real buyers commit to.`
     : "Where the market actually clears. Built from the highest bid on every electric-vehicle auction on our platform — the price real buyers commit to.";
-  const auctionsLabel = brand ? `${escapeHtml(brand)} auctions` : 'EV auctions';
+  const auctionsLabel = scopeLabel ? `${escapeHtml(scopeLabel)} auctions` : 'EV auctions';
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${brand ? `${escapeHtml(brand)} Auction Price Index` : 'EV Auction Price Index — Internal'}</title>
+<title>${scopeLabel ? `${escapeHtml(scopeLabel)} Auction Price Index` : 'EV Auction Price Index — Internal'}</title>
 <style>${css}</style>
 </head>
 <body>
@@ -452,16 +469,19 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
     <div class="source">Source &amp; details: Notion · "Increase Valuation for cheaper cars"</div>
   </div>
 
-  <section class="section-card">
-    <div class="section-label">Section 4 · ${brand ? 'Model' : 'Brand &amp; origin'}</div>
-    <h2 class="section-title">${brand ? 'Price &amp; mix by model' : 'Price &amp; mix by brand and country of origin'}</h2>
+  ${
+    opts.scopeLevel === 'model'
+      ? ''
+      : `<section class="section-card">
+    <div class="section-label">Section 4 · ${scopeLabel ? 'Model' : 'Brand &amp; origin'}</div>
+    <h2 class="section-title">${scopeLabel ? 'Price &amp; mix by model' : 'Price &amp; mix by brand and country of origin'}</h2>
     <p class="section-desc">${
-      brand
+      scopeLabel
         ? 'Composition over time and key metrics per model.'
         : "Composition over time and key metrics per group. Switch between individual brands and the brand's country of origin."
     }</p>
     ${
-      brand
+      scopeLabel
         ? ''
         : '<div class="segmented" style="max-width:220px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button></div>'
     }
@@ -475,18 +495,19 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
       </tr></thead>
       <tbody id="brand-country-table-body"></tbody>
     </table>
-  </section>
+  </section>`
+  }
 
   <section class="section-card">
     <div class="section-label">Breakdown</div>
     <h2 class="section-title">Composition by period</h2>
-    <p class="section-desc">Brand mix, mileage coverage, and price for the filtered sample. Click a header to sort.</p>
+    <p class="section-desc">${opts.scopeLevel === 'model' ? 'Mileage coverage and price for the filtered sample. Click a header to sort.' : 'Brand mix, mileage coverage, and price for the filtered sample. Click a header to sort.'}</p>
     <div class="segmented" style="max-width:180px; margin-bottom:0.8rem;">
       <button data-granularity="month" class="active">Month</button><button data-granularity="quarter">Quarter</button>
     </div>
     <table>
       <thead><tr>
-        <th data-sort-table="composition" data-sort-col="period">Period</th><th data-sort-table="composition" data-sort-col="n">n</th><th>Top brand</th><th data-sort-table="composition" data-sort-col="pctWithKm">% with km</th><th data-sort-table="composition" data-sort-col="avgKm">Avg km</th><th data-sort-table="composition" data-sort-col="medianKm">Median km</th><th data-sort-table="composition" data-sort-col="avgBid">Avg bid</th><th data-sort-table="composition" data-sort-col="medianBid">Median bid</th>
+        <th data-sort-table="composition" data-sort-col="period">Period</th><th data-sort-table="composition" data-sort-col="n">n</th>${opts.scopeLevel === 'model' ? '' : '<th>Top brand</th>'}<th data-sort-table="composition" data-sort-col="pctWithKm">% with km</th><th data-sort-table="composition" data-sort-col="avgKm">Avg km</th><th data-sort-table="composition" data-sort-col="medianKm">Median km</th><th data-sort-table="composition" data-sort-col="avgBid">Avg bid</th><th data-sort-table="composition" data-sort-col="medianBid">Median bid</th>
       </tr></thead>
       <tbody id="composition-table-body"></tbody>
       <tfoot><tr id="composition-total-row"></tr></tfoot>
@@ -519,7 +540,8 @@ window.EV_DASHBOARD = {
   baseMonth: ${JSON.stringify(data.baseMonth)},
   latestMonth: ${JSON.stringify(data.latestMonth)},
   latestMonthPartial: ${JSON.stringify(data.latestMonthPartial)},
-  defaultGroupBy: ${JSON.stringify(brand ? 'model' : 'country')}
+  scopeLevel: ${JSON.stringify(opts.scopeLevel ?? null)},
+  defaultGroupBy: ${JSON.stringify(opts.scopeLevel === 'brand' ? 'model' : 'country')}
 };
 </script>
 <script>${js}</script>

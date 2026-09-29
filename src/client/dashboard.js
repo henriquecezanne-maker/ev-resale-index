@@ -703,6 +703,7 @@
       return (av - bv) * dir;
     });
 
+    var showTopBrand = window.EV_DASHBOARD.scopeLevel !== 'model';
     var tbody = document.getElementById('composition-table-body');
     while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
     rows.forEach(function (r) {
@@ -710,7 +711,7 @@
       tr.innerHTML =
         '<td>' + r.label + '</td>' +
         '<td>' + fmtNum(r.n) + '</td>' +
-        '<td>' + (r.topBrand || '–') + ' ' + r.topBrandShare.toFixed(0) + '%</td>' +
+        (showTopBrand ? '<td>' + (r.topBrand || '–') + ' ' + r.topBrandShare.toFixed(0) + '%</td>' : '') +
         '<td>' + r.pctWithKm.toFixed(0) + '%</td>' +
         '<td>' + fmtNum(r.avgKm) + '</td>' +
         '<td>' + fmtNum(r.medianKm) + '</td>' +
@@ -724,7 +725,7 @@
     totalRow.innerHTML =
       '<td>All periods</td>' +
       '<td>' + fmtNum(filtered.length) + '</td>' +
-      '<td></td>' +
+      (showTopBrand ? '<td></td>' : '') +
       '<td>' + ((filtered.filter(function (d) { return d.km > 0; }).length / filtered.length) * 100).toFixed(0) + '%</td>' +
       '<td>' + fmtNum(mean(filtered.map(function (d) { return d.km; }))) + '</td>' +
       '<td>' + fmtNum(median(filtered.map(function (d) { return d.km; }))) + '</td>' +

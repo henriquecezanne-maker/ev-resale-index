@@ -28,16 +28,32 @@ if (removedAuctionKeys.size > 0) {
 
 const data = computeDashboardData(deals, totalRows, droppedRows, removedAuctionKeys);
 
-const teslaDeals = deals.filter((d) => d.brand === 'Tesla');
-const teslaData = computeDashboardData(teslaDeals, teslaDeals.length, 0, removedAuctionKeys);
+// Brand/model-scoped pages — each gets the full interactive dashboard, pre-filtered.
+// Order here also sets the nav order (besides the fixed Internal/Press ends).
+const subsetPages: Array<{ slug: string; label: string; scopeLevel: 'brand' | 'model'; deals: typeof deals }> = [
+  { slug: 'tesla', label: 'Tesla', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Tesla') },
+  { slug: 'model-y', label: 'Model Y', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Tesla' && d.model === 'Model Y') },
+  { slug: 'model-3', label: 'Model 3', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Tesla' && d.model === 'Model 3') },
+];
+const navLinks = subsetPages.map((p) => ({ slug: p.slug, label: p.label }));
 
 mkdirSync(outputsDir, { recursive: true });
-writeFileSync(join(outputsDir, 'index.html'), renderInternalDashboard(data), 'utf-8');
-writeFileSync(join(outputsDir, 'tesla.html'), renderInternalDashboard(teslaData, { brand: 'Tesla' }), 'utf-8');
-writeFileSync(join(outputsDir, 'press.html'), renderPressDashboard(data), 'utf-8');
-
+writeFileSync(join(outputsDir, 'index.html'), renderInternalDashboard(data, { subsetPages: navLinks }), 'utf-8');
 console.log(`Wrote ${join(outputsDir, 'index.html')}`);
-console.log(`Wrote ${join(outputsDir, 'tesla.html')} (${teslaDeals.length.toString()} Tesla auctions)`);
+
+for (const page of subsetPages) {
+  const pageData = computeDashboardData(page.deals, page.deals.length, 0, removedAuctionKeys);
+  const html = renderInternalDashboard(pageData, {
+    scopeLabel: page.label,
+    scopeLevel: page.scopeLevel,
+    subsetPages: navLinks,
+    ownSlug: page.slug,
+  });
+  writeFileSync(join(outputsDir, `${page.slug}.html`), html, 'utf-8');
+  console.log(`Wrote ${join(outputsDir, `${page.slug}.html`)} (${page.deals.length.toString()} auctions)`);
+}
+
+writeFileSync(join(outputsDir, 'press.html'), renderPressDashboard(data), 'utf-8');
 console.log(`Wrote ${join(outputsDir, 'press.html')}`);
 console.log(
   `Index since Jan 2026: raw ${data.rawChangeSinceJan >= 0 ? '+' : ''}${data.rawChangeSinceJan.toFixed(1)}%, mix-adjusted ${data.weightedChangeSinceJan >= 0 ? '+' : ''}${data.weightedChangeSinceJan.toFixed(1)}%.`,
