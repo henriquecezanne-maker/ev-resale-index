@@ -32,23 +32,19 @@ export function fitLinear(points: Array<{ t: number; rv: number }>): CurveFit {
 }
 
 /**
- * Exponential fit RV = a * e^(-b*t) via log-linear regression on ln(RV) vs t.
+ * Exponential fit RV = 100 * e^(-b*t), anchored at 100% (new price) at t=0 by
+ * definition rather than fitted — t=0 isn't a measured point (nothing sells brand
+ * new at auction), so letting the intercept float lets noise in the youngest
+ * vehicles drag the curve's start away from the one value we know is exactly right.
+ * Single-parameter log-linear regression through the origin: ln(RV/100) = -b*t.
  * Requires rv > 0 for all points (guaranteed by the 5-120% clip in load.ts).
  */
 export function fitExponential(points: Array<{ t: number; rv: number }>): CurveFit {
-  const logPoints = points.map((p) => ({ t: p.t, logRv: Math.log(p.rv) }));
-  const n = logPoints.length;
-  const sumT = logPoints.reduce((s, p) => s + p.t, 0);
-  const sumLog = logPoints.reduce((s, p) => s + p.logRv, 0);
-  const sumTT = logPoints.reduce((s, p) => s + p.t * p.t, 0);
-  const sumTLog = logPoints.reduce((s, p) => s + p.t * p.logRv, 0);
-  const denom = n * sumTT - sumT * sumT;
-  const slope = denom === 0 ? 0 : (n * sumTLog - sumT * sumLog) / denom;
-  const intercept = (sumLog - slope * sumT) / n;
-  const a = Math.exp(intercept);
-  const b = -slope;
-  const predicted = points.map((p) => a * Math.exp(-b * p.t));
-  return { type: 'exponential', a, b, r2: rSquared(points.map((p) => p.rv), predicted) };
+  const sumTT = points.reduce((s, p) => s + p.t * p.t, 0);
+  const sumTLogRatio = points.reduce((s, p) => s + p.t * Math.log(p.rv / 100), 0);
+  const b = sumTT === 0 ? 0 : -sumTLogRatio / sumTT;
+  const predicted = points.map((p) => 100 * Math.exp(-b * p.t));
+  return { type: 'exponential', a: 100, b, r2: rSquared(points.map((p) => p.rv), predicted) };
 }
 
 /** Residual-value dataset filtered per methodology §3/§6: plausible RV, 0-10y age window, fit on individual vehicles. */

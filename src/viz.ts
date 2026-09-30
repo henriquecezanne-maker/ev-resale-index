@@ -686,6 +686,7 @@ export function renderResidualValueDashboard(data: DashboardData, subsetPages: S
       <div class="segmented" style="max-width:220px;"><button data-cluster-mode="country" class="active">Country of origin</button><button data-cluster-mode="brand">Brand</button></div>
       <button class="btn" id="btn-toggle-all">Show all</button>
       <button class="btn" id="btn-toggle-none">Hide all</button>
+      <div class="segmented" style="max-width:260px;"><button data-residual-accident="all" class="active">All</button><button data-residual-accident="free">Accident-free only</button><button data-residual-accident="with">With accident only</button></div>
     </div>
     <div class="cluster-toggles" id="cluster-toggles"></div>
     <div class="legend" id="legend-residual-curves"></div>

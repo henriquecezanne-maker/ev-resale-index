@@ -55,23 +55,22 @@
     return ssTot === 0 ? 0 : 1 - ssRes / ssTot;
   }
 
-  // Exponential fit RV = a * e^(-b*t) via log-linear regression on ln(RV) vs t.
-  // Requires rv > 0 for all points (guaranteed by the 5-120% clip applied before fitting).
+  // Exponential fit RV = 100 * e^(-b*t), anchored at 100% (new price) at t=0 by
+  // definition rather than fitted — t=0 isn't a measured point (nothing sells brand
+  // new at auction), so letting the intercept float lets noise in the youngest
+  // vehicles drag the curve's start away from the one value we know is exactly right.
+  // Single-parameter log-linear regression through the origin: ln(RV/100) = -b*t.
   function fitExponential(points) {
     var n = points.length;
-    var sumT = 0, sumLog = 0, sumTT = 0, sumTLog = 0;
+    var sumTT = 0, sumTLog = 0;
     for (var i = 0; i < n; i++) {
       var t = points[i].t;
-      var logRv = Math.log(points[i].rv);
-      sumT += t; sumLog += logRv; sumTT += t * t; sumTLog += t * logRv;
+      var logRatio = Math.log(points[i].rv / 100);
+      sumTT += t * t; sumTLog += t * logRatio;
     }
-    var denom = n * sumTT - sumT * sumT;
-    var slope = denom === 0 ? 0 : (n * sumTLog - sumT * sumLog) / denom;
-    var intercept = (sumLog - slope * sumT) / n;
-    var a = Math.exp(intercept);
-    var b = -slope;
-    var predicted = points.map(function (p) { return a * Math.exp(-b * p.t); });
-    return { a: a, b: b, r2: rSquared(points.map(function (p) { return p.rv; }), predicted) };
+    var b = sumTT === 0 ? 0 : -sumTLog / sumTT;
+    var predicted = points.map(function (p) { return 100 * Math.exp(-b * p.t); });
+    return { a: 100, b: b, r2: rSquared(points.map(function (p) { return p.rv; }), predicted) };
   }
 
   // ---- SVG chart primitives (subset of dashboard.js's, self-contained) ----
@@ -110,17 +109,31 @@
     var tMax = 10;
     var svg = svgEl('svg', { viewBox: '0 0 ' + width + ' ' + height, width: '100%', height: height });
 
-    var toX = function (t) { return padding.left + (t / tMax) * (width - padding.left - padding.right); };
-    var toY = function (rv) { return padding.top + (1 - rv / 100) * (height - padding.top - padding.bottom); };
+    // All curves are anchored at exactly 100% at t=0, so a fixed 0-100% axis
+    // compresses every curve's differences into the last few percentage points of
+    // chart height. Zooming the y-axis to the data's actual range (still always
+    // including 100, since every curve touches it at t=0) makes brand differences
+    // in decay speed visible instead of all lines looking like they're on top of
+    // each other near the top of the chart.
+    var yMax = 100;
+    var yMin = 0;
+    if (curves.length > 0) {
+      var endValues = curves.map(function (c) { return c.fit.a * Math.exp(-c.fit.b * tMax); });
+      yMin = Math.max(0, Math.floor(Math.min.apply(null, endValues) / 5) * 5 - 5);
+    }
 
-    // y-axis gridlines at 0/25/50/75/100%
-    [0, 25, 50, 75, 100].forEach(function (rv) {
+    var toX = function (t) { return padding.left + (t / tMax) * (width - padding.left - padding.right); };
+    var toY = function (rv) { return padding.top + (1 - (rv - yMin) / (yMax - yMin)) * (height - padding.top - padding.bottom); };
+
+    // y-axis gridlines every 10 percentage points across the zoomed range.
+    var tickStep = 10;
+    for (var rv = Math.ceil(yMin / tickStep) * tickStep; rv <= yMax; rv += tickStep) {
       var y = toY(rv);
       svg.appendChild(svgEl('line', { x1: padding.left, x2: width - padding.right, y1: y, y2: y, stroke: 'rgba(128,128,128,0.15)' }));
       var text = svgEl('text', { x: padding.left - 8, y: y + 4, 'font-size': 10, 'text-anchor': 'end', fill: '#7a838a' });
       text.textContent = rv + '%';
       svg.appendChild(text);
-    });
+    }
     for (var t = 0; t <= tMax; t += 2) {
       var x = toX(t);
       var label = svgEl('text', { x: x, y: height - 8, 'font-size': 10, 'text-anchor': 'middle', fill: '#7a838a' });
@@ -164,10 +177,16 @@
       .map(function (d) { return { t: d.ag, rv: d.rv }; });
   }
 
+  function accidentFiltered(data) {
+    if (state.accident === 'free') return data.filter(function (d) { return d.af; });
+    if (state.accident === 'with') return data.filter(function (d) { return !d.af; });
+    return data;
+  }
+
   function groupsFromMode(mode) {
     var groupFn = mode === 'brand' ? function (d) { return d.b; } : function (d) { return brandCountry(d.b); };
     var groups = {};
-    ALL_DATA.forEach(function (d) {
+    accidentFiltered(ALL_DATA).forEach(function (d) {
       var g = groupFn(d);
       if (!groups[g]) groups[g] = [];
       groups[g].push(d);
@@ -188,6 +207,7 @@
   var state = {
     mode: 'country', // country | brand
     active: null, // null = all groups shown; otherwise a Set of active group names
+    accident: 'all', // all | free | with
   };
 
   function render() {
@@ -262,6 +282,16 @@
         render();
       });
     }
+
+    document.querySelectorAll('[data-residual-accident]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.accident = btn.getAttribute('data-residual-accident');
+        document.querySelectorAll('[data-residual-accident]').forEach(function (b) {
+          b.classList.toggle('active', b.getAttribute('data-residual-accident') === state.accident);
+        });
+        render();
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
