@@ -90,7 +90,7 @@
   var ALL_DATA = window.EV_DASHBOARD.deals;
   var BASE_MONTH = window.EV_DASHBOARD.baseMonth;
 
-  var kmMax = 0, ageMax = 0, batteryMax = 0, powerMax = 0, listMax = 0, bidMax = 0, bidMin = Infinity, batteryMin = Infinity;
+  var kmMax = 0, ageMax = 0, batteryMax = 0, powerMax = 0, listMax = 0, npMax = 0, bidMax = 0, bidMin = Infinity, batteryMin = Infinity;
   ALL_DATA.forEach(function (d) {
     if (d.km > kmMax) kmMax = d.km;
     if (d.ag > ageMax) ageMax = d.ag;
@@ -98,6 +98,7 @@
     if (d.bk < batteryMin) batteryMin = d.bk;
     if (d.pk > powerMax) powerMax = d.pk;
     if (d.lp > listMax) listMax = d.lp;
+    if (d.np > npMax) npMax = d.np;
     if (d.hb > bidMax) bidMax = d.hb;
     if (d.hb < bidMin) bidMin = d.hb;
   });
@@ -110,6 +111,7 @@
     batteryRange: [Math.floor(batteryMin), Math.ceil(batteryMax)],
     powerRange: [0, Math.ceil(powerMax)],
     listRange: [0, Math.ceil(listMax)],
+    npRange: [0, Math.ceil(npMax)], // new price (list price + special equipment) — used by the list-price-bands tab, separate from listRange's filter-panel slider
     bidRange: [Math.floor(bidMin), Math.ceil(bidMax)],
     minBids: 0,
     priceBasis: 'corrected', // corrected | raw
@@ -148,6 +150,16 @@
     { label: '60k+', min: 60000, max: Infinity },
   ];
 
+  // New-price (list price + special equipment) bands for the list-price-bands page.
+  var LIST_PRICE_BANDS = [
+    { label: '<25k', min: -Infinity, max: 25000 },
+    { label: '25-35k', min: 25000, max: 35000 },
+    { label: '35-45k', min: 35000, max: 45000 },
+    { label: '45-60k', min: 45000, max: 60000 },
+    { label: '60-80k', min: 60000, max: 80000 },
+    { label: '80k+', min: 80000, max: Infinity },
+  ];
+
   function bandOf(bands, value) {
     for (var i = 0; i < bands.length; i++) {
       if (value >= bands[i].min && value < bands[i].max) return bands[i].label;
@@ -168,6 +180,7 @@
       if (d.bk < state.batteryRange[0] || d.bk > state.batteryRange[1]) return false;
       if (d.pk < state.powerRange[0] || d.pk > state.powerRange[1]) return false;
       if (d.lp < state.listRange[0] || d.lp > state.listRange[1]) return false;
+      if (d.np < state.npRange[0] || d.np > state.npRange[1]) return false;
       var bidValue = state.priceBasis === 'raw' ? d.hr : d.hb;
       if (bidValue < state.bidRange[0] || bidValue > state.bidRange[1]) return false;
       if (d.bi < state.minBids) return false;
@@ -193,6 +206,7 @@
       state.batteryRange = [Math.floor(batteryMin), Math.ceil(batteryMax)];
       state.powerRange = [0, Math.ceil(powerMax)];
       state.listRange = [0, Math.ceil(listMax)];
+      state.npRange = [0, Math.ceil(npMax)];
       state.bidRange = [Math.floor(bidMin), Math.ceil(bidMax)];
       state.minBids = 0;
     }
@@ -442,6 +456,7 @@
       if (d.bk < state.batteryRange[0] || d.bk > state.batteryRange[1]) return false;
       if (d.pk < state.powerRange[0] || d.pk > state.powerRange[1]) return false;
       if (d.lp < state.listRange[0] || d.lp > state.listRange[1]) return false;
+      if (d.np < state.npRange[0] || d.np > state.npRange[1]) return false;
       var bidValue = state.priceBasis === 'raw' ? d.hr : d.hb;
       if (bidValue < state.bidRange[0] || bidValue > state.bidRange[1]) return false;
       if (d.bi < state.minBids) return false;
@@ -781,12 +796,17 @@
       });
     });
 
-    document.querySelectorAll('[data-battery-band]').forEach(function (btn) {
+    document.querySelectorAll('[data-band]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var label = btn.getAttribute('data-battery-band');
-        var picked = BATTERY_BANDS.filter(function (b) { return b.label === label; })[0];
-        state.batteryRange = picked ? [picked.min === -Infinity ? Math.floor(batteryMin) : picked.min, picked.max === Infinity ? Math.ceil(batteryMax) : picked.max] : [Math.floor(batteryMin), Math.ceil(batteryMax)];
-        document.querySelectorAll('[data-battery-band]').forEach(function (b) { b.classList.toggle('active', b === btn); });
+        var label = btn.getAttribute('data-band');
+        var isBattery = window.EV_DASHBOARD.bandTabs === 'battery';
+        var bands = isBattery ? BATTERY_BANDS : LIST_PRICE_BANDS;
+        var fullRange = isBattery ? [Math.floor(batteryMin), Math.ceil(batteryMax)] : [0, Math.ceil(npMax)];
+        var picked = bands.filter(function (b) { return b.label === label; })[0];
+        var range = picked ? [picked.min === -Infinity ? fullRange[0] : picked.min, picked.max === Infinity ? fullRange[1] : picked.max] : fullRange;
+        if (isBattery) state.batteryRange = range;
+        else state.npRange = range;
+        document.querySelectorAll('[data-band]').forEach(function (b) { b.classList.toggle('active', b === btn); });
         render();
       });
     });
@@ -984,12 +1004,16 @@
   // ---- Main render ---------------------------------------------------------
 
   function renderDatasetTabs() {
-    if (document.getElementById('battery-band-tabs')) {
+    if (document.getElementById('band-tabs')) {
+      var isBattery = window.EV_DASHBOARD.bandTabs === 'battery';
+      var atFullRange = isBattery
+        ? state.batteryRange[0] === Math.floor(batteryMin) && state.batteryRange[1] === Math.ceil(batteryMax)
+        : state.npRange[0] === 0 && state.npRange[1] === Math.ceil(npMax);
       var note = document.getElementById('dataset-tabs-note');
       if (note) {
-        note.textContent = state.batteryRange[0] === Math.floor(batteryMin) && state.batteryRange[1] === Math.ceil(batteryMax)
-          ? 'Showing all battery sizes.'
-          : 'Filtered to one battery band — every chart and table below reflects only this band\'s auctions.';
+        note.textContent = atFullRange
+          ? 'Showing all ' + (isBattery ? 'battery sizes' : 'price bands') + '.'
+          : 'Filtered to one ' + (isBattery ? 'battery band' : 'price band') + ' — every chart and table below reflects only this band\'s auctions.';
       }
       return;
     }

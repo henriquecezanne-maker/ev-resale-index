@@ -272,8 +272,8 @@ export interface InternalDashboardOptions {
   subsetPages?: SubsetPageLink[];
   /** This page's own slug within subsetPages, so the right nav link is marked active. */
   ownSlug?: string;
-  /** Shows a battery-band tab bar (instead of the dataset tabs) that filters the whole page to one band client-side, so the fleet profile/composition table can be inspected per band. */
-  showBatteryBandTabs?: boolean;
+  /** Shows a band-tab bar (instead of the dataset tabs) that filters the whole page to one band client-side, so the fleet profile/composition table can be inspected per band. 'battery' bands by battery kWh, 'listPrice' bands by new price (list price + special equipment). */
+  bandTabs?: 'battery' | 'listPrice';
 }
 
 export function renderInternalDashboard(data: DashboardData, opts: InternalDashboardOptions = {}): string {
@@ -295,6 +295,7 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
     `<a href="index.html"${opts.ownSlug === undefined ? ' class="active"' : ''}>Internal</a>`,
     `<a href="residual-value.html"${opts.ownSlug === 'residual-value' ? ' class="active"' : ''}>Residual Value</a>`,
     `<a href="battery-bands.html"${opts.ownSlug === 'battery-bands' ? ' class="active"' : ''}>Battery Bands</a>`,
+    `<a href="list-price-bands.html"${opts.ownSlug === 'list-price-bands' ? ' class="active"' : ''}>List Price Bands</a>`,
     ...subsetPages.map(
       (p) => `<a href="${p.slug}.html"${p.slug === opts.ownSlug ? ' class="active"' : ''}>${escapeHtml(p.label)}</a>`,
     ),
@@ -331,18 +332,29 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
 </header>
 
 ${
-  opts.showBatteryBandTabs
-    ? `<div class="dataset-tabs" id="battery-band-tabs">
-  <button class="dataset-tab active" data-battery-band="all">All bands</button>
-  <button class="dataset-tab" data-battery-band="&lt;20 kWh">&lt;20 kWh</button>
-  <button class="dataset-tab" data-battery-band="20-40 kWh">20-40 kWh</button>
-  <button class="dataset-tab" data-battery-band="40-60 kWh">40-60 kWh</button>
-  <button class="dataset-tab" data-battery-band="60-80 kWh">60-80 kWh</button>
-  <button class="dataset-tab" data-battery-band="80-100 kWh">80-100 kWh</button>
-  <button class="dataset-tab" data-battery-band="100+ kWh">100+ kWh</button>
+  opts.bandTabs === 'battery'
+    ? `<div class="dataset-tabs" id="band-tabs">
+  <button class="dataset-tab active" data-band="all">All bands</button>
+  <button class="dataset-tab" data-band="&lt;20 kWh">&lt;20 kWh</button>
+  <button class="dataset-tab" data-band="20-40 kWh">20-40 kWh</button>
+  <button class="dataset-tab" data-band="40-60 kWh">40-60 kWh</button>
+  <button class="dataset-tab" data-band="60-80 kWh">60-80 kWh</button>
+  <button class="dataset-tab" data-band="80-100 kWh">80-100 kWh</button>
+  <button class="dataset-tab" data-band="100+ kWh">100+ kWh</button>
   <span class="dataset-tabs-note" id="dataset-tabs-note"></span>
 </div>`
-    : `<div class="dataset-tabs">
+    : opts.bandTabs === 'listPrice'
+      ? `<div class="dataset-tabs" id="band-tabs">
+  <button class="dataset-tab active" data-band="all">All bands</button>
+  <button class="dataset-tab" data-band="&lt;25k">&lt;25k</button>
+  <button class="dataset-tab" data-band="25-35k">25-35k</button>
+  <button class="dataset-tab" data-band="35-45k">35-45k</button>
+  <button class="dataset-tab" data-band="45-60k">45-60k</button>
+  <button class="dataset-tab" data-band="60-80k">60-80k</button>
+  <button class="dataset-tab" data-band="80k+">80k+</button>
+  <span class="dataset-tabs-note" id="dataset-tabs-note"></span>
+</div>`
+      : `<div class="dataset-tabs">
   <button class="dataset-tab active" data-dataset="all">All auctions</button>
   <button class="dataset-tab" data-dataset="comparable">Comparable period <span id="removed-count-badge"></span></button>
   <span class="dataset-tabs-note" id="dataset-tabs-note"></span>
@@ -558,7 +570,8 @@ window.EV_DASHBOARD = {
   latestMonth: ${JSON.stringify(data.latestMonth)},
   latestMonthPartial: ${JSON.stringify(data.latestMonthPartial)},
   scopeLevel: ${JSON.stringify(opts.scopeLevel ?? null)},
-  defaultGroupBy: ${JSON.stringify(opts.scopeLevel === 'brand' ? 'model' : 'country')}
+  defaultGroupBy: ${JSON.stringify(opts.scopeLevel === 'brand' ? 'model' : 'country')},
+  bandTabs: ${JSON.stringify(opts.bandTabs ?? null)}
 };
 </script>
 <script>${js}</script>
@@ -637,6 +650,7 @@ export function renderResidualValueDashboard(data: DashboardData, subsetPages: S
     `<a href="index.html">Internal</a>`,
     `<a href="residual-value.html" class="active">Residual Value</a>`,
     `<a href="battery-bands.html">Battery Bands</a>`,
+    `<a href="list-price-bands.html">List Price Bands</a>`,
     ...subsetPages.map((p) => `<a href="${p.slug}.html">${escapeHtml(p.label)}</a>`),
     `<a href="press.html">Press</a>`,
   ].join('');
