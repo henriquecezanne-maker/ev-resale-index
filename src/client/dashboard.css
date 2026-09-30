@@ -199,6 +199,25 @@ footer.page-footer { max-width: 1180px; margin: 0 auto; padding: 1.2rem 1.5rem 2
 
 svg { width: 100%; height: auto; display: block; }
 
+main.full-width { display: block; }
+main.full-width .section-card { grid-column: unset; }
+
+.cluster-controls { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+.cluster-toggles { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+.cluster-toggle {
+  --toggle-color: var(--accent);
+  border: 1.5px solid var(--toggle-color);
+  background: var(--card-bg);
+  color: var(--toggle-color);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cluster-toggle.active { background: var(--toggle-color); color: #fff; }
+.thin-clusters-note { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.6rem; }
+
 @media (max-width: 860px) {
   main { grid-template-columns: 1fr; }
   .filters-panel { grid-row: auto; position: static; max-height: none; }

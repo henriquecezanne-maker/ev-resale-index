@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateEnv } from './env.js';
 import { findLatestCsv, loadDeals, loadRemovedAuctionKeys } from './load.js';
-import { computeDashboardData, renderInternalDashboard, renderPressDashboard } from './viz.js';
+import { computeDashboardData, renderInternalDashboard, renderPressDashboard, renderResidualValueDashboard } from './viz.js';
 
 // Always validate secrets first — if something is missing, the app stops here
 // with a friendly message instead of crashing somewhere deep inside.
@@ -49,6 +49,9 @@ const navLinks = subsetPages.map((p) => ({ slug: p.slug, label: p.label }));
 mkdirSync(outputsDir, { recursive: true });
 writeFileSync(join(outputsDir, 'index.html'), renderInternalDashboard(data, { subsetPages: navLinks }), 'utf-8');
 console.log(`Wrote ${join(outputsDir, 'index.html')}`);
+
+writeFileSync(join(outputsDir, 'residual-value.html'), renderResidualValueDashboard(data, navLinks), 'utf-8');
+console.log(`Wrote ${join(outputsDir, 'residual-value.html')}`);
 
 for (const page of subsetPages) {
   const pageData = computeDashboardData(page.deals, page.deals.length, 0, removedAuctionKeys);

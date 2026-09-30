@@ -291,6 +291,7 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
 
   const navLinks = [
     `<a href="index.html"${opts.ownSlug === undefined ? ' class="active"' : ''}>Internal</a>`,
+    `<a href="residual-value.html"${opts.ownSlug === 'residual-value' ? ' class="active"' : ''}>Residual Value</a>`,
     ...subsetPages.map(
       (p) => `<a href="${p.slug}.html"${p.slug === opts.ownSlug ? ' class="active"' : ''}>${escapeHtml(p.label)}</a>`,
     ),
@@ -608,6 +609,70 @@ export function renderPressDashboard(data: DashboardData): string {
   <p class="muted" style="margin-top: 3rem;">Methodik: Median des höchsten Gebots je Auktion (steuerbereinigt), mix-bereinigt nach Batteriekapazität. Restwert = höchstes Gebot / Neupreis (inkl. Sonderausstattung).</p>
 </main>
 <footer>EV Resale Index · Aampere</footer>
+</body>
+</html>`;
+}
+
+export function renderResidualValueDashboard(data: DashboardData, subsetPages: SubsetPageLink[] = []): string {
+  const css = readClientAsset('dashboard.css');
+  const js = readClientAsset('residual-dashboard.js');
+
+  const navLinks = [
+    `<a href="index.html">Internal</a>`,
+    `<a href="residual-value.html" class="active">Residual Value</a>`,
+    ...subsetPages.map((p) => `<a href="${p.slug}.html">${escapeHtml(p.label)}</a>`),
+    `<a href="press.html">Press</a>`,
+  ].join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Residual Value Curves — Internal</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="nav">${navLinks}</div>
+
+<header class="page-header">
+  <div>
+    <div class="eyebrow">⚡ Electric Vehicle Market Data</div>
+    <h1>Residual Value Curves</h1>
+    <div class="page-sub">How EVs lose value with age, split by country of origin or brand. Each curve is a separate exponential fit (RV = a·e^(−b·t)) on that cluster's own auctions — toggle clusters on/off to compare.</div>
+  </div>
+  <div class="export-badge">
+    <b>${num(data.cleanedN)} EV auctions</b>
+  </div>
+</header>
+
+<main class="full-width">
+  <section class="section-card">
+    <div class="section-label">Cluster by</div>
+    <div class="cluster-controls">
+      <div class="segmented" style="max-width:220px;"><button data-cluster-mode="country" class="active">Country of origin</button><button data-cluster-mode="brand">Brand</button></div>
+      <button class="btn" id="btn-toggle-all">Show all</button>
+      <button class="btn" id="btn-toggle-none">Hide all</button>
+    </div>
+    <div class="cluster-toggles" id="cluster-toggles"></div>
+    <div class="legend" id="legend-residual-curves"></div>
+    <div id="chart-residual-curves"></div>
+    <div class="thin-clusters-note" id="thin-clusters-note"></div>
+  </section>
+
+  <section class="methodology-note">
+    <b>Methodology.</b> Residual value = highest bid (corrected) / new price (list price + special equipment) × 100, per auction. Each cluster's curve is an exponential fit (RV = a·e^(−b·t), t in years) via log-linear regression on its own auctions, restricted to the 0–10 year age window and 5–120% plausible-residual range (methodology §3/§6) — the same fit the brand ranking on the internal dashboard uses. Clusters with fewer than 15 vehicles in that window aren't fitted (listed below the chart instead) since a curve on that little data isn't reliable. This is a wholesale/auction value — conservative vs. end-customer resale price — so compare shapes and relative ranking, not the absolute level.
+  </section>
+</main>
+
+<footer class="page-footer">Residual Value Curves · fit per visible cluster, computed live from ${num(data.cleanedN)} auctions.</footer>
+
+<script>
+window.EV_DASHBOARD = {
+  deals: ${JSON.stringify(data.clientDeals)}
+};
+</script>
+<script>${js}</script>
 </body>
 </html>`;
 }
