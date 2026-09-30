@@ -32,6 +32,17 @@ const data = computeDashboardData(deals, totalRows, droppedRows, removedAuctionK
 // Order here also sets the nav order (besides the fixed Internal/Press ends).
 const subsetPages: Array<{ slug: string; label: string; scopeLevel: 'brand' | 'model'; deals: typeof deals }> = [
   { slug: 'tesla', label: 'Tesla', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Tesla') },
+  { slug: 'volkswagen', label: 'Volkswagen', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Volkswagen') },
+  { slug: 'bmw', label: 'BMW', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'BMW') },
+  { slug: 'hyundai', label: 'Hyundai', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Hyundai') },
+  { slug: 'kia', label: 'Kia', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Kia') },
+  { slug: 'mercedes-benz', label: 'Mercedes-Benz', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Mercedes-Benz') },
+  { slug: 'audi', label: 'Audi', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Audi') },
+  { slug: 'renault', label: 'Renault', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Renault') },
+  { slug: 'opel', label: 'Opel', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Opel') },
+  { slug: 'smart', label: 'Smart', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Smart') },
+  { slug: 'skoda', label: 'Skoda', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Skoda') },
+  { slug: 'ford', label: 'Ford', scopeLevel: 'brand', deals: deals.filter((d) => d.brand === 'Ford') },
   { slug: 'model-y', label: 'Model Y', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Tesla' && d.model === 'Model Y') },
   { slug: 'model-3', label: 'Model 3', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Tesla' && d.model === 'Model 3') },
   { slug: 'ioniq-5', label: 'Ioniq 5', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Hyundai' && d.model === 'Ioniq 5') },
