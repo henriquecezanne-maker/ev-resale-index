@@ -37,6 +37,12 @@ const subsetPages: Array<{ slug: string; label: string; scopeLevel: 'brand' | 'm
   { slug: 'ioniq-5', label: 'Ioniq 5', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Hyundai' && d.model === 'Ioniq 5') },
   { slug: 'ev6', label: 'EV6', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Kia' && d.model === 'EV6') },
   { slug: 'id3', label: 'ID.3', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Volkswagen' && d.model === 'ID.3') },
+  { slug: 'born', label: 'Born', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Cupra' && d.model === 'Born') },
+  { slug: 'kona', label: 'Kona', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Hyundai' && d.model === 'Kona') },
+  { slug: 'enyaq', label: 'Enyaq', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Skoda' && d.model === 'Enyaq') },
+  { slug: 'id4', label: 'ID.4', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Volkswagen' && d.model === 'ID.4') },
+  { slug: 'mach-e', label: 'Mach-E', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'Ford' && d.model === 'MACH-E') },
+  { slug: 'i4', label: 'i4', scopeLevel: 'model', deals: deals.filter((d) => d.brand === 'BMW' && d.model === 'i4') },
 ];
 const navLinks = subsetPages.map((p) => ({ slug: p.slug, label: p.label }));
 
