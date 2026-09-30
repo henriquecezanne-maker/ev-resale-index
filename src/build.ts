@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateEnv } from './env.js';
 import { findLatestCsv, loadDeals, loadRemovedAuctionKeys } from './load.js';
-import { computeDashboardData, renderInternalDashboard, renderPressDashboard, renderResidualValueDashboard } from './viz.js';
+import { computeDashboardData, renderDemandDashboard, renderInternalDashboard, renderPressDashboard, renderResidualValueDashboard } from './viz.js';
 
 // Always validate secrets first — if something is missing, the app stops here
 // with a friendly message instead of crashing somewhere deep inside.
@@ -52,6 +52,9 @@ console.log(`Wrote ${join(outputsDir, 'index.html')}`);
 
 writeFileSync(join(outputsDir, 'residual-value.html'), renderResidualValueDashboard(data, navLinks), 'utf-8');
 console.log(`Wrote ${join(outputsDir, 'residual-value.html')}`);
+
+writeFileSync(join(outputsDir, 'demand.html'), renderDemandDashboard(data, navLinks), 'utf-8');
+console.log(`Wrote ${join(outputsDir, 'demand.html')}`);
 
 writeFileSync(
   join(outputsDir, 'battery-bands.html'),

@@ -294,6 +294,7 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
   const navLinks = [
     `<a href="index.html"${opts.ownSlug === undefined ? ' class="active"' : ''}>Internal</a>`,
     `<a href="residual-value.html"${opts.ownSlug === 'residual-value' ? ' class="active"' : ''}>Residual Value</a>`,
+    `<a href="demand.html"${opts.ownSlug === 'demand' ? ' class="active"' : ''}>Demand</a>`,
     `<a href="battery-bands.html"${opts.ownSlug === 'battery-bands' ? ' class="active"' : ''}>Battery Bands</a>`,
     `<a href="list-price-bands.html"${opts.ownSlug === 'list-price-bands' ? ' class="active"' : ''}>List Price Bands</a>`,
     ...subsetPages.map(
@@ -649,6 +650,7 @@ export function renderResidualValueDashboard(data: DashboardData, subsetPages: S
   const navLinks = [
     `<a href="index.html">Internal</a>`,
     `<a href="residual-value.html" class="active">Residual Value</a>`,
+    `<a href="demand.html">Demand</a>`,
     `<a href="battery-bands.html">Battery Bands</a>`,
     `<a href="list-price-bands.html">List Price Bands</a>`,
     ...subsetPages.map((p) => `<a href="${p.slug}.html">${escapeHtml(p.label)}</a>`),
@@ -697,6 +699,82 @@ export function renderResidualValueDashboard(data: DashboardData, subsetPages: S
 </main>
 
 <footer class="page-footer">Residual Value Curves · fit per visible cluster, computed live from ${num(data.cleanedN)} auctions.</footer>
+
+<script>
+window.EV_DASHBOARD = {
+  deals: ${JSON.stringify(data.clientDeals)}
+};
+</script>
+<script>${js}</script>
+</body>
+</html>`;
+}
+
+export function renderDemandDashboard(data: DashboardData, subsetPages: SubsetPageLink[] = []): string {
+  const css = readClientAsset('dashboard.css');
+  const js = readClientAsset('demand-dashboard.js');
+
+  const navLinks = [
+    `<a href="index.html">Internal</a>`,
+    `<a href="residual-value.html">Residual Value</a>`,
+    `<a href="demand.html" class="active">Demand</a>`,
+    `<a href="battery-bands.html">Battery Bands</a>`,
+    `<a href="list-price-bands.html">List Price Bands</a>`,
+    ...subsetPages.map((p) => `<a href="${p.slug}.html">${escapeHtml(p.label)}</a>`),
+    `<a href="press.html">Press</a>`,
+  ].join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Demand Ranking — Internal</title>
+<style>${css}</style>
+</head>
+<body>
+<div class="nav">${navLinks}</div>
+
+<header class="page-header">
+  <div>
+    <div class="eyebrow">⚡ Electric Vehicle Market Data</div>
+    <h1>Demand Ranking</h1>
+    <div class="page-sub">Which cars draw the most competitive bidding — average number of bids per auction, independent of price. A high-priced car that draws few bids isn't necessarily "in demand"; a car that consistently pulls a crowd of bidders is.</div>
+  </div>
+  <div class="export-badge">
+    <b>${num(data.cleanedN)} EV auctions</b>
+  </div>
+</header>
+
+<main class="full-width">
+  <section class="section-card">
+    <div class="section-label">View</div>
+    <div class="cluster-controls">
+      <div class="segmented" style="max-width:220px;"><button data-demand-view="rank" class="active">Ranking</button><button data-demand-view="time">Over time</button></div>
+      <div class="segmented" style="max-width:520px;"><button data-demand-mode="model" class="active">Model</button><button data-demand-mode="brand">Brand</button><button data-demand-mode="country">Country of origin</button><button data-demand-mode="km">Mileage</button><button data-demand-mode="age">Age</button></div>
+      <div class="segmented" style="max-width:180px;"><button data-demand-metric="mean" class="active">Average</button><button data-demand-metric="median">Median</button></div>
+      <div class="segmented" style="max-width:260px;"><button data-demand-accident="all" class="active">All</button><button data-demand-accident="free">Accident-free only</button><button data-demand-accident="with">With accident only</button></div>
+    </div>
+    <div class="cluster-toggles" id="demand-cluster-toggles" style="display:none;"></div>
+    <div class="legend" id="legend-demand-time" style="display:none;"></div>
+    <div id="chart-demand-ranking"></div>
+    <div class="thin-clusters-note" id="demand-thin-note"></div>
+  </section>
+
+  <section class="section-card" id="demand-table-section">
+    <h2 class="section-title">Full ranking</h2>
+    <table>
+      <thead><tr><th>#</th><th>Name</th><th>Avg bids</th><th>n</th></tr></thead>
+      <tbody id="demand-table-body"></tbody>
+    </table>
+  </section>
+
+  <section class="methodology-note">
+    <b>Methodology.</b> "Number of bids" counts every bid placed on an auction, regardless of price. This is a demand/desirability signal independent of the price index and residual-value curves — a car can be expensive AND in low demand (few, high bids from committed buyers) or affordable AND in high demand (many competing bids). "Ranking" sorts by average bids; mileage and age are shown as trend bands in their natural order (not ranked) since the question there is "does demand rise or fall along this axis," not "which band wins." "Over time" plots one line per cluster (brand/country/model — mileage/age fall back to brand, since a 3-axis chart isn't legible) across the months in the export, so demand trends can be compared between clusters instead of just seeing the market total; toggle clusters on/off to compare. The accident-free filter applies to every view. Groups below the minimum sample size (30 for brand/country/mileage/age, 20 for model, 15 auctions/month for "Over time" clusters) aren't shown since their average would be too noisy to trust.
+  </section>
+</main>
+
+<footer class="page-footer">Demand Ranking · average bids per auction, computed live from ${num(data.cleanedN)} auctions.</footer>
 
 <script>
 window.EV_DASHBOARD = {
