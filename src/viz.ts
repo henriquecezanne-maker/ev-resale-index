@@ -272,6 +272,8 @@ export interface InternalDashboardOptions {
   subsetPages?: SubsetPageLink[];
   /** This page's own slug within subsetPages, so the right nav link is marked active. */
   ownSlug?: string;
+  /** Shows a battery-band tab bar (instead of the dataset tabs) that filters the whole page to one band client-side, so the fleet profile/composition table can be inspected per band. */
+  showBatteryBandTabs?: boolean;
 }
 
 export function renderInternalDashboard(data: DashboardData, opts: InternalDashboardOptions = {}): string {
@@ -292,6 +294,7 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
   const navLinks = [
     `<a href="index.html"${opts.ownSlug === undefined ? ' class="active"' : ''}>Internal</a>`,
     `<a href="residual-value.html"${opts.ownSlug === 'residual-value' ? ' class="active"' : ''}>Residual Value</a>`,
+    `<a href="battery-bands.html"${opts.ownSlug === 'battery-bands' ? ' class="active"' : ''}>Battery Bands</a>`,
     ...subsetPages.map(
       (p) => `<a href="${p.slug}.html"${p.slug === opts.ownSlug ? ' class="active"' : ''}>${escapeHtml(p.label)}</a>`,
     ),
@@ -327,11 +330,24 @@ export function renderInternalDashboard(data: DashboardData, opts: InternalDashb
   </div>
 </header>
 
-<div class="dataset-tabs">
+${
+  opts.showBatteryBandTabs
+    ? `<div class="dataset-tabs" id="battery-band-tabs">
+  <button class="dataset-tab active" data-battery-band="all">All bands</button>
+  <button class="dataset-tab" data-battery-band="&lt;20 kWh">&lt;20 kWh</button>
+  <button class="dataset-tab" data-battery-band="20-40 kWh">20-40 kWh</button>
+  <button class="dataset-tab" data-battery-band="40-60 kWh">40-60 kWh</button>
+  <button class="dataset-tab" data-battery-band="60-80 kWh">60-80 kWh</button>
+  <button class="dataset-tab" data-battery-band="80-100 kWh">80-100 kWh</button>
+  <button class="dataset-tab" data-battery-band="100+ kWh">100+ kWh</button>
+  <span class="dataset-tabs-note" id="dataset-tabs-note"></span>
+</div>`
+    : `<div class="dataset-tabs">
   <button class="dataset-tab active" data-dataset="all">All auctions</button>
   <button class="dataset-tab" data-dataset="comparable">Comparable period <span id="removed-count-badge"></span></button>
   <span class="dataset-tabs-note" id="dataset-tabs-note"></span>
-</div>
+</div>`
+}
 
 <main>
   <aside class="filters-panel">
@@ -620,6 +636,7 @@ export function renderResidualValueDashboard(data: DashboardData, subsetPages: S
   const navLinks = [
     `<a href="index.html">Internal</a>`,
     `<a href="residual-value.html" class="active">Residual Value</a>`,
+    `<a href="battery-bands.html">Battery Bands</a>`,
     ...subsetPages.map((p) => `<a href="${p.slug}.html">${escapeHtml(p.label)}</a>`),
     `<a href="press.html">Press</a>`,
   ].join('');

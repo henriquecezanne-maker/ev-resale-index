@@ -234,7 +234,7 @@
     clearChart(container);
     var width = opts.width || container.clientWidth || 900;
     var height = opts.height || 300;
-    var padding = { top: 24, right: 20, bottom: 30, left: 56 };
+    var padding = { top: 24, right: 20, bottom: 30, left: opts.compact ? 56 : 64 };
     var svg = svgEl('svg', { viewBox: '0 0 ' + width + ' ' + height, width: '100%', height: height });
 
     var n = opts.labels.length;
@@ -250,20 +250,44 @@
     var labelStride = Math.max(1, Math.ceil(minPxPerLabel / (xStep || minPxPerLabel)));
     var showAt = function (i) { return i % labelStride === 0 || i === n - 1; };
 
-    var allValues = [];
-    opts.series.forEach(function (s) {
-      s.values.forEach(function (v) { if (isFinite(v)) allValues.push(v); });
-    });
-    if (opts.basisLine !== undefined) allValues.push(opts.basisLine);
-    var yMin = Math.min.apply(null, allValues.concat([0]));
-    var yMax = Math.max.apply(null, allValues.concat([1]));
-    if (opts.basisLine === undefined) yMin = Math.min.apply(null, allValues);
-    var yPad = (yMax - yMin) * 0.12 || 1;
-    yMin -= yPad;
-    yMax += yPad;
+    var yMin, yMax;
+    if (opts.yRange) {
+      yMin = opts.yRange[0];
+      yMax = opts.yRange[1];
+    } else {
+      var allValues = [];
+      opts.series.forEach(function (s) {
+        s.values.forEach(function (v) { if (isFinite(v)) allValues.push(v); });
+      });
+      if (opts.basisLine !== undefined) allValues.push(opts.basisLine);
+      yMin = Math.min.apply(null, allValues.concat([0]));
+      yMax = Math.max.apply(null, allValues.concat([1]));
+      if (opts.basisLine === undefined) yMin = Math.min.apply(null, allValues);
+      var yPad = (yMax - yMin) * 0.12 || 1;
+      yMin -= yPad;
+      yMax += yPad;
+    }
     var toY = function (v) {
       return padding.top + (height - padding.top - padding.bottom) * (1 - (v - yMin) / (yMax - yMin));
     };
+
+    // y-axis gridlines + labels — skipped on compact mini-charts (fleet-profile tiles)
+    // where the value is already shown inline via showValues and axis text would just clutter.
+    if (!opts.compact) {
+      var yTickCount = 4;
+      for (var yt = 0; yt <= yTickCount; yt++) {
+        var yVal = yMin + ((yMax - yMin) * yt) / yTickCount;
+        var yPix = toY(yVal);
+        svg.appendChild(svgEl('line', {
+          x1: padding.left, x2: width - padding.right, y1: yPix, y2: yPix, stroke: 'rgba(128,128,128,0.15)',
+        }));
+        var yLabel = svgEl('text', {
+          x: padding.left - 8, y: yPix + 4, 'font-size': 10, 'text-anchor': 'end', fill: '#7a838a',
+        });
+        yLabel.textContent = opts.yFormat ? opts.yFormat(yVal) : yVal.toFixed(0);
+        svg.appendChild(yLabel);
+      }
+    }
 
     // bar layer (sample size) behind lines
     if (opts.bars) {
@@ -489,6 +513,7 @@
       series: series,
       bars: points.map(function (p) { return p.n; }),
       basisLine: 100,
+      yRange: [60, 150],
       yFormat: function (v) { return v.toFixed(1); },
       showValues: true,
       height: 300,
@@ -756,6 +781,16 @@
       });
     });
 
+    document.querySelectorAll('[data-battery-band]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var label = btn.getAttribute('data-battery-band');
+        var picked = BATTERY_BANDS.filter(function (b) { return b.label === label; })[0];
+        state.batteryRange = picked ? [picked.min === -Infinity ? Math.floor(batteryMin) : picked.min, picked.max === Infinity ? Math.ceil(batteryMax) : picked.max] : [Math.floor(batteryMin), Math.ceil(batteryMax)];
+        document.querySelectorAll('[data-battery-band]').forEach(function (b) { b.classList.toggle('active', b === btn); });
+        render();
+      });
+    });
+
     document.querySelectorAll('[data-accident]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         state.accident = btn.getAttribute('data-accident');
@@ -949,6 +984,15 @@
   // ---- Main render ---------------------------------------------------------
 
   function renderDatasetTabs() {
+    if (document.getElementById('battery-band-tabs')) {
+      var note = document.getElementById('dataset-tabs-note');
+      if (note) {
+        note.textContent = state.batteryRange[0] === Math.floor(batteryMin) && state.batteryRange[1] === Math.ceil(batteryMax)
+          ? 'Showing all battery sizes.'
+          : 'Filtered to one battery band — every chart and table below reflects only this band\'s auctions.';
+      }
+      return;
+    }
     var removedTotal = ALL_DATA.filter(function (d) { return d.rm; }).length;
     var badge = document.getElementById('removed-count-badge');
     if (badge) badge.textContent = removedTotal > 0 ? '(-' + fmtNum(removedTotal) + ')' : '';

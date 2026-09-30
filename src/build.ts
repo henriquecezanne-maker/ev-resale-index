@@ -53,6 +53,13 @@ console.log(`Wrote ${join(outputsDir, 'index.html')}`);
 writeFileSync(join(outputsDir, 'residual-value.html'), renderResidualValueDashboard(data, navLinks), 'utf-8');
 console.log(`Wrote ${join(outputsDir, 'residual-value.html')}`);
 
+writeFileSync(
+  join(outputsDir, 'battery-bands.html'),
+  renderInternalDashboard(data, { subsetPages: navLinks, ownSlug: 'battery-bands', showBatteryBandTabs: true }),
+  'utf-8',
+);
+console.log(`Wrote ${join(outputsDir, 'battery-bands.html')}`);
+
 for (const page of subsetPages) {
   const pageData = computeDashboardData(page.deals, page.deals.length, 0, removedAuctionKeys);
   const html = renderInternalDashboard(pageData, {
