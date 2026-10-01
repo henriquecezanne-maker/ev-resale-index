@@ -34,8 +34,33 @@
     Skoda: 'Czech Rep.', Dacia: 'Romania',
   };
 
+  // Parent-company groupings, as of 2026. Smart is a Mercedes-Benz/Geely 50-50
+  // joint venture — grouped under Mercedes-Benz Group by brand heritage.
+  var BRAND_GROUP = {
+    Volkswagen: 'Volkswagen Group', Audi: 'Volkswagen Group', Skoda: 'Volkswagen Group',
+    Cupra: 'Volkswagen Group', Seat: 'Volkswagen Group', Porsche: 'Volkswagen Group',
+    BMW: 'BMW Group', MINI: 'BMW Group',
+    'Mercedes-Benz': 'Mercedes-Benz Group', Smart: 'Mercedes-Benz Group',
+    Hyundai: 'Hyundai Motor Group', Kia: 'Hyundai Motor Group', Genesis: 'Hyundai Motor Group',
+    Renault: 'Renault Group', Dacia: 'Renault Group',
+    Opel: 'Stellantis', Fiat: 'Stellantis', Peugeot: 'Stellantis', 'Citroën': 'Stellantis',
+    'DS Automobiles': 'Stellantis', Jeep: 'Stellantis', Abarth: 'Stellantis', Maserati: 'Stellantis', 'Alfa Romeo': 'Stellantis',
+    Volvo: 'Geely Group', Polestar: 'Geely Group', Lotus: 'Geely Group',
+    Toyota: 'Toyota Group', Lexus: 'Toyota Group',
+    Tesla: 'Tesla',
+    Ford: 'Ford',
+    Nissan: 'Nissan', Mazda: 'Mazda', Honda: 'Honda', Subaru: 'Subaru',
+    MG: 'SAIC Motor', Aiways: 'Aiways', BYD: 'BYD', Xpeng: 'Xpeng', Nio: 'Nio',
+    DFSK: 'DFSK', Maxus: 'SAIC Motor', GWM: 'Great Wall Motor', Leapmotor: 'Leapmotor',
+    Jaguar: 'JLR', Ssangyong: 'KG Mobility', Cadillac: 'GM',
+  };
+
   function brandCountry(brand) {
     return BRAND_COUNTRY[brand] || 'Other';
+  }
+
+  function brandGroup(brand) {
+    return BRAND_GROUP[brand] || brand;
   }
 
   function median(values) {
@@ -633,6 +658,7 @@
     var labels = keys.map(function (k) { return state.periodGranularity === 'quarter' ? quarterLabel(k) : monthLabel(k); });
 
     var groupFn = state.groupBy === 'country' ? function (d) { return brandCountry(d.b); }
+      : state.groupBy === 'konzern' ? function (d) { return brandGroup(d.b); }
       : state.groupBy === 'model' ? function (d) { return d.m; }
       : function (d) { return d.b; };
     var groups = {};
@@ -642,7 +668,7 @@
       groups[g].push(d);
     });
     var groupNames = Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length; });
-    var topGroups = state.groupBy === 'country' ? groupNames : groupNames.slice(0, 10);
+    var topGroups = state.groupBy === 'country' || state.groupBy === 'konzern' ? groupNames : groupNames.slice(0, 10);
     var colors = topGroups.map(function (g, i) {
       return COUNTRY_COLORS[g] || ['#0b4f4a', '#14877e', '#e09a3e', '#5fb3ac', '#8a5fc9', '#c9515f', '#3f7f3a', '#b98d2a', '#2a5fb9', '#9aa3ab'][i % 10];
     });

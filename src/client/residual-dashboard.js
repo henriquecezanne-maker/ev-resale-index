@@ -37,8 +37,33 @@
 
   var FALLBACK_COLORS = ['#0b4f4a', '#14877e', '#e09a3e', '#5fb3ac', '#8a5fc9', '#c9515f', '#3f7f3a', '#b98d2a', '#2a5fb9', '#9aa3ab'];
 
+  // Parent-company groupings, as of 2026. Smart is a Mercedes-Benz/Geely 50-50
+  // joint venture — grouped under Mercedes-Benz Group by brand heritage.
+  var BRAND_GROUP = {
+    Volkswagen: 'Volkswagen Group', Audi: 'Volkswagen Group', Skoda: 'Volkswagen Group',
+    Cupra: 'Volkswagen Group', Seat: 'Volkswagen Group', Porsche: 'Volkswagen Group',
+    BMW: 'BMW Group', MINI: 'BMW Group',
+    'Mercedes-Benz': 'Mercedes-Benz Group', Smart: 'Mercedes-Benz Group',
+    Hyundai: 'Hyundai Motor Group', Kia: 'Hyundai Motor Group', Genesis: 'Hyundai Motor Group',
+    Renault: 'Renault Group', Dacia: 'Renault Group',
+    Opel: 'Stellantis', Fiat: 'Stellantis', Peugeot: 'Stellantis', 'Citroën': 'Stellantis',
+    'DS Automobiles': 'Stellantis', Jeep: 'Stellantis', Abarth: 'Stellantis', Maserati: 'Stellantis', 'Alfa Romeo': 'Stellantis',
+    Volvo: 'Geely Group', Polestar: 'Geely Group', Lotus: 'Geely Group',
+    Toyota: 'Toyota Group', Lexus: 'Toyota Group',
+    Tesla: 'Tesla',
+    Ford: 'Ford',
+    Nissan: 'Nissan', Mazda: 'Mazda', Honda: 'Honda', Subaru: 'Subaru',
+    MG: 'SAIC Motor', Aiways: 'Aiways', BYD: 'BYD', Xpeng: 'Xpeng', Nio: 'Nio',
+    DFSK: 'DFSK', Maxus: 'SAIC Motor', GWM: 'Great Wall Motor', Leapmotor: 'Leapmotor',
+    Jaguar: 'JLR', Ssangyong: 'KG Mobility', Cadillac: 'GM',
+  };
+
   function brandCountry(brand) {
     return BRAND_COUNTRY[brand] || 'Other';
+  }
+
+  function brandGroupName(brand) {
+    return BRAND_GROUP[brand] || brand;
   }
 
   function fmtNum(n) {
@@ -184,7 +209,9 @@
   }
 
   function groupsFromMode(mode) {
-    var groupFn = mode === 'brand' ? function (d) { return d.b; } : function (d) { return brandCountry(d.b); };
+    var groupFn = mode === 'brand' ? function (d) { return d.b; }
+      : mode === 'konzern' ? function (d) { return brandGroupName(d.b); }
+      : function (d) { return brandCountry(d.b); };
     var groups = {};
     accidentFiltered(ALL_DATA).forEach(function (d) {
       var g = groupFn(d);
@@ -205,7 +232,7 @@
   }
 
   var state = {
-    mode: 'country', // country | brand
+    mode: 'country', // country | brand | konzern
     active: null, // null = all groups shown; otherwise a Set of active group names
     accident: 'all', // all | free | with
   };

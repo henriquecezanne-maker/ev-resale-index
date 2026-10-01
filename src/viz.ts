@@ -513,7 +513,7 @@ ${
     ${
       scopeLabel
         ? ''
-        : '<div class="segmented" style="max-width:220px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button></div>'
+        : '<div class="segmented" style="max-width:320px; margin-bottom:0.8rem;"><button data-group-by="country" class="active">Country of origin</button><button data-group-by="brand">Brand</button><button data-group-by="konzern">Parent company</button></div>'
     }
     <div class="legend" id="legend-brand-country"></div>
     <div id="chart-brand-country"></div>
@@ -683,7 +683,7 @@ export function renderResidualValueDashboard(data: DashboardData, subsetPages: S
   <section class="section-card">
     <div class="section-label">Cluster by</div>
     <div class="cluster-controls">
-      <div class="segmented" style="max-width:220px;"><button data-cluster-mode="country" class="active">Country of origin</button><button data-cluster-mode="brand">Brand</button></div>
+      <div class="segmented" style="max-width:340px;"><button data-cluster-mode="country" class="active">Country of origin</button><button data-cluster-mode="brand">Brand</button><button data-cluster-mode="konzern">Parent company</button></div>
       <button class="btn" id="btn-toggle-all">Show all</button>
       <button class="btn" id="btn-toggle-none">Hide all</button>
       <div class="segmented" style="max-width:260px;"><button data-residual-accident="all" class="active">All</button><button data-residual-accident="free">Accident-free only</button><button data-residual-accident="with">With accident only</button></div>
@@ -752,7 +752,7 @@ export function renderDemandDashboard(data: DashboardData, subsetPages: SubsetPa
     <div class="section-label">View</div>
     <div class="cluster-controls">
       <div class="segmented" style="max-width:220px;"><button data-demand-view="rank" class="active">Ranking</button><button data-demand-view="time">Over time</button></div>
-      <div class="segmented" style="max-width:520px;"><button data-demand-mode="model" class="active">Model</button><button data-demand-mode="brand">Brand</button><button data-demand-mode="country">Country of origin</button><button data-demand-mode="km">Mileage</button><button data-demand-mode="age">Age</button></div>
+      <div class="segmented" style="max-width:640px;"><button data-demand-mode="model" class="active">Model</button><button data-demand-mode="brand">Brand</button><button data-demand-mode="country">Country of origin</button><button data-demand-mode="konzern">Parent company</button><button data-demand-mode="km">Mileage</button><button data-demand-mode="age">Age</button></div>
       <div class="segmented" style="max-width:180px;"><button data-demand-metric="mean" class="active">Average</button><button data-demand-metric="median">Median</button></div>
       <div class="segmented" style="max-width:260px;"><button data-demand-accident="all" class="active">All</button><button data-demand-accident="free">Accident-free only</button><button data-demand-accident="with">With accident only</button></div>
     </div>
